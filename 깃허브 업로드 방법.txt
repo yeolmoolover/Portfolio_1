@@ -1,0 +1,9 @@
+1. Add file 에서 Creat new file 선택
+2. 상단 "Name your file..."입력창에 포트폴리오 명(ex: Pathfinder)입력 후 슬래시(/)입력하면 자동으로 폴더 생성됨
+3. 이후 "Name your file..."입력창에 "index.html"입력 후 body에 다른 index 내용 복붙
+4. index내용 중간에 이미지 명을 내가 업로드할 이미지 명으로 변경
+5. 우측 상단 커밋 체인지
+6. Add file에서 Upload files 선택
+7. 4번에 입력한 이미지 업로드
+8. 주소창에 https://yeolmoolover.github.io/Portfolio_1/2번에 업로드한 포트폴리오 명 입력
+(Ex: https://yeolmoolover.github.io/Portfolio_1/pathfinder/)
