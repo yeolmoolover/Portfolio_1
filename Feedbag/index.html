@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="robots" content="noindex">
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center; /* 가로 가운데 정렬 */
+            background-color: #fcfbfc; /* 배경색 (선택사항: 이미지 밖 여백 색상) */
+        }
+        img {
+            width: 80%; /* 이미지 너비 80% */
+            height: auto;
+        }
+    /* 로딩 화면 스타일 */
+        #loader {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: #ffffff; /* 배경색 */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+        }
+
+        /* 돌아가는 동그라미 모양 */
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db; /* 로딩 바 색상 */
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <img src="피드백 랜딩페이지-01.jpg"><img src="피드백 랜딩페이지-02.jpg">
+</body>
+</html>
