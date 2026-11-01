@@ -66,6 +66,12 @@ class BubbleController(
         root.findViewById<View>(R.id.btn_stop).setOnClickListener { callbacks.onStop() }
     }
 
+    /** Screen-space rectangle currently covered by the bubble + menu + status (for OCR exclusion). */
+    fun bounds(): android.graphics.Rect {
+        val pad = (8 * context.resources.displayMetrics.density).toInt()
+        return android.graphics.Rect(lp.x - pad, lp.y - pad, lp.x + root.width + pad, lp.y + root.height + pad)
+    }
+
     fun hide() {
         if (attached) { wm.removeView(root); attached = false }
     }

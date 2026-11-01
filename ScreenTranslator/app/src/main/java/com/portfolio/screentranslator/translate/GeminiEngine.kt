@@ -57,7 +57,7 @@ class GeminiEngine(
         val (code, payload) = text
         when {
             code == 429 -> throw QuotaExceededException("$name 한도 초과 (429)")
-            code !in 200..299 -> throw EngineUnavailableException("$name HTTP $code: ${payload.take(200)}")
+            code !in 200..299 -> throw EngineUnavailableException("$name HTTP $code: ${errorMessage(payload)}")
         }
         val json = JSONObject(payload)
         val candidates = json.optJSONArray("candidates")
@@ -72,6 +72,12 @@ class GeminiEngine(
         }
         TranslationResult(PromptBuilder.parse(sb.toString()), name)
     }
+
+    private fun errorMessage(payload: String): String = runCatching {
+        JSONObject(payload).getJSONObject("error").let { e ->
+            "${e.optString("status")} ${e.optString("message")}".trim()
+        }
+    }.getOrDefault(payload.replace('\n', ' ')).take(220)
 
     /** Returns (http status, body). */
     private fun call(url: String, key: String, base: JSONObject, withThinkingConfig: Boolean): Pair<Int, String> {

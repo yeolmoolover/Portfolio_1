@@ -85,6 +85,8 @@ class CaptureService : Service(), BubbleController.Callbacks {
     private var translateJob: Job? = null
     private var lastFrameFp: IntArray? = null
     private var lastTranslatedFp: IntArray? = null
+    /** Fingerprint of the same screen with our overlay drawn on it (capture includes overlays). */
+    private var lastTranslatedFpWithOverlay: IntArray? = null
     private var stableSince = 0L
     private var overlayHiddenForMotion = false
     private var peeking = false
@@ -212,11 +214,12 @@ class CaptureService : Service(), BubbleController.Callbacks {
                     continue
                 }
                 if (now - stableSince < 600) { bmp.recycle(); continue }
+                if (ImageUtil.diff(lastTranslatedFpWithOverlay, fp) <= 6) { bmp.recycle(); continue }
                 if (ImageUtil.diff(lastTranslatedFp, fp) <= 6) {
                     // same screen as last translation: just restore the overlay
                     if (overlayHiddenForMotion) {
                         overlayHiddenForMotion = false
-                        withContext(Dispatchers.Main) { overlay?.blocks = currentBlocks }
+                        showOverlay(currentBlocks)
                     }
                     bmp.recycle(); continue
                 }
@@ -231,14 +234,16 @@ class CaptureService : Service(), BubbleController.Callbacks {
     private suspend fun translateBitmap(bmp: Bitmap, fp: IntArray) {
         bubble?.setBusy(true)
         try {
+            val bubbleRect = bubble?.bounds()
             val blocks = ocr.recognise(bmp, prefs.sourceLang)
+                .filter { bubbleRect == null || !Rect.intersects(it.box, bubbleRect) }
             lastSource = blocks
             lastBitmap?.recycle(); lastBitmap = bmp
             val comic = prefs.comicMode
             if (blocks.isEmpty() && !comic) {
                 lastTranslatedFp = fp; currentBlocks = emptyList()
-                withContext(Dispatchers.Main) { overlay?.blocks = emptyList() }
-                bubble?.setStatus("글자를 찾지 못했습니다"); return
+                bubble?.setStatus("글자를 찾지 못했습니다")
+                showOverlay(emptyList()); return
             }
             val req = buildRequest(bmp, blocks, comic)
             val key = chain.cacheKey(req, comic)
@@ -248,19 +253,35 @@ class CaptureService : Service(), BubbleController.Callbacks {
             currentBlocks = drawn
             lastTranslatedFp = fp
             overlayHiddenForMotion = false
-            withContext(Dispatchers.Main) { overlay?.blocks = drawn }
             val status = buildString {
                 append(if (cachedHit) "저장된 번역" else result.engineUsed)
-                chain.lastError?.let { append(" · 대체됨: ").append(it.take(60)) }
+                append(" · ").append(drawn.size).append("개")
+                chain.lastError?.let { append(" · 대체됨: ").append(it.take(220)) }
             }
             bubble?.setStatus(status)
+            showOverlay(drawn)
         } catch (e: Exception) {
             Log.w(TAG, "translate failed", e)
-            bubble?.setStatus("실패: ${e.message?.take(90)}")
+            bubble?.setStatus("실패: ${e.message?.take(260)}")
             lastTranslatedFp = fp   // don't retry the same frame in a loop
         } finally {
             bubble?.setBusy(false)
         }
+    }
+
+    /**
+     * Draws [blocks], waits a moment for the compositor, then records the fingerprint of the
+     * screen *with* the overlay so the watcher does not mistake our own drawing for motion.
+     */
+    private suspend fun showOverlay(blocks: List<TranslatedBlock>) {
+        withContext(Dispatchers.Main) { overlay?.blocks = blocks }
+        delay(350)
+        val after = grabFrame() ?: return
+        val fp = ImageUtil.fingerprint(after)
+        after.recycle()
+        lastTranslatedFpWithOverlay = fp
+        lastFrameFp = fp
+        stableSince = System.currentTimeMillis()
     }
 
     private fun buildRequest(bmp: Bitmap, blocks: List<SourceBlock>, comic: Boolean): TranslationRequest {
@@ -339,7 +360,7 @@ class CaptureService : Service(), BubbleController.Callbacks {
     }
 
     override fun onClear() {
-        currentBlocks = emptyList(); lastTranslatedFp = null
+        currentBlocks = emptyList(); lastTranslatedFp = null; lastTranslatedFpWithOverlay = null
         main.post { overlay?.blocks = emptyList() }
         bubble?.setStatus(null)
     }
@@ -348,7 +369,8 @@ class CaptureService : Service(), BubbleController.Callbacks {
 
     override fun onPeekOriginal(peeking: Boolean) {
         this.peeking = peeking
-        main.post { overlay?.blocks = if (peeking) emptyList() else currentBlocks }
+        if (peeking) main.post { overlay?.blocks = emptyList() }
+        else scope.launch { showOverlay(currentBlocks) }
     }
 
     // ---------------------------------------------------------------- teardown
