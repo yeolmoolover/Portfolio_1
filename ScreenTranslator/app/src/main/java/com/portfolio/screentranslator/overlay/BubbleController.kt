@@ -49,7 +49,7 @@ class BubbleController(
         PixelFormat.TRANSLUCENT,
     ).apply {
         gravity = Gravity.TOP or Gravity.START
-        x = context.resources.displayMetrics.widthPixels - (72 * context.resources.displayMetrics.density).toInt()
+        x = context.resources.displayMetrics.widthPixels - (92 * context.resources.displayMetrics.density).toInt()
         y = context.resources.displayMetrics.heightPixels / 3
     }
 

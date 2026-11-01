@@ -51,10 +51,13 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("auto_mode", true)
         set(v) = sp.edit().putBoolean("auto_mode", v).apply()
 
-    /** 0.3 .. 0.8 — Android 12+ blocks touch pass-through above 0.8 opacity. */
+    /**
+     * 0.3 .. 1.0. Boxes are separate small windows, so above 0.8 only touches landing
+     * on a translated box are blocked by Android 12+; the rest of the screen stays touchable.
+     */
     var opacity: Float
-        get() = sp.getFloat("opacity", 0.8f)
-        set(v) = sp.edit().putFloat("opacity", v.coerceIn(0.3f, 0.8f)).apply()
+        get() = sp.getFloat("opacity2", 1.0f)
+        set(v) = sp.edit().putFloat("opacity2", v.coerceIn(0.3f, 1.0f)).apply()
 
     var fontScale: Float
         get() = sp.getFloat("font_scale", 1.0f)

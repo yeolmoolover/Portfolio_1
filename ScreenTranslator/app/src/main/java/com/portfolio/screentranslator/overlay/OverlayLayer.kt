@@ -1,0 +1,69 @@
+package com.portfolio.screentranslator.overlay
+
+import android.content.Context
+import android.graphics.PixelFormat
+import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
+import android.view.Gravity
+import android.view.WindowManager
+import com.portfolio.screentranslator.translate.TranslatedBlock
+
+/**
+ * One small overlay window per translated block instead of a single full-screen window.
+ *
+ * Why: Android 12+ drops touches that pass through a non-touchable overlay whose window
+ * opacity is above 0.8. With a full-screen window that forces the translation to be
+ * semi-transparent (text bleeds through). With per-block windows the boxes can be 100 %
+ * opaque: touches anywhere outside a box still reach the app; only touches that land on a
+ * translated box are blocked by the system.
+ */
+class OverlayLayer(
+    private val context: Context,
+    private val wm: WindowManager,
+    private val alpha: Float,
+    private val fontScale: Float,
+) {
+    private val main = Handler(Looper.getMainLooper())
+    private val views = ArrayList<OverlayView>()
+    private val pad = (4 * context.resources.displayMetrics.density).toInt()
+
+    /** Must be called on the main thread. */
+    var blocks: List<TranslatedBlock> = emptyList()
+        set(value) {
+            field = value
+            clearViews()
+            for (b in value) addBlock(b)
+        }
+
+    private fun addBlock(b: TranslatedBlock) {
+        val r = Rect(b.box).apply { inset(-pad, -pad) }
+        if (r.width() <= 0 || r.height() <= 0) return
+        val shifted = b.copy(box = Rect(pad, pad, pad + b.box.width(), pad + b.box.height()))
+        val v = OverlayView(context).apply {
+            fontScale = this@OverlayLayer.fontScale
+            blocks = listOf(shifted)
+        }
+        val lp = WindowManager.LayoutParams(
+            r.width(), r.height(),
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT,
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = r.left; y = r.top
+            this.alpha = this@OverlayLayer.alpha
+        }
+        runCatching { wm.addView(v, lp); views += v }
+    }
+
+    private fun clearViews() {
+        for (v in views) runCatching { wm.removeView(v) }
+        views.clear()
+    }
+
+    fun destroy() { main.post { clearViews() } }
+}

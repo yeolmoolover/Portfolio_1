@@ -17,7 +17,7 @@
     <string name="source_lang">원문 언어</string>
     <string name="comic_mode">만화 모드 (스크린샷도 함께 보내 효과음·오인식 보정)</string>
     <string name="auto_mode">자동 모드 (화면이 멈추면 자동 번역)</string>
-    <string name="opacity">번역 배경 불투명도</string>
+    <string name="opacity">번역 배경 불투명도 (80% 초과 시 번역 상자 위를 누르는 터치는 차단됨)</string>
     <string name="font_scale">글자 크기 배율</string>
     <string name="usage_today">오늘 사용: Gemini %1$d회 · Gemma %2$d회 · Claude %3$d회 · ML Kit %4$d회</string>
     <string name="perm_overlay">다른 앱 위에 표시 권한이 필요합니다</string>

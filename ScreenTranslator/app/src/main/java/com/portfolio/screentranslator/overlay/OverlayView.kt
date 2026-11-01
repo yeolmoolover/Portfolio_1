@@ -44,7 +44,7 @@ class OverlayView(context: Context) : View(context) {
     }
 
     private fun drawBlock(canvas: Canvas, b: TranslatedBlock) {
-        val pad = 3 * density
+        val pad = 4 * density
         val box = RectF(b.box).apply { inset(-pad, -pad) }
         boxPaint.color = b.bgColor
         boxPaint.style = Paint.Style.FILL

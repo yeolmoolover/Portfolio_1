@@ -26,7 +26,7 @@ import android.widget.Toast
 import com.portfolio.screentranslator.ocr.OcrEngine
 import com.portfolio.screentranslator.overlay.BubbleController
 import com.portfolio.screentranslator.overlay.CompareView
-import com.portfolio.screentranslator.overlay.OverlayView
+import com.portfolio.screentranslator.overlay.OverlayLayer
 import com.portfolio.screentranslator.translate.EngineChain
 import com.portfolio.screentranslator.translate.SourceBlock
 import com.portfolio.screentranslator.translate.TranslatedBlock
@@ -77,7 +77,7 @@ class CaptureService : Service(), BubbleController.Callbacks {
 
     private val ocr = OcrEngine()
     private lateinit var chain: EngineChain
-    private var overlay: OverlayView? = null
+    private var overlay: OverlayLayer? = null
     private var bubble: BubbleController? = null
     private var compare: CompareView? = null
 
@@ -165,21 +165,8 @@ class CaptureService : Service(), BubbleController.Callbacks {
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR, reader!!.surface, null, main,
         )
 
-        overlay = OverlayView(this).also { v ->
-            v.fontScale = prefs.fontScale
-            val lp = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                PixelFormat.TRANSLUCENT,
-            )
-            // Android 12+: touches only pass through windows with opacity <= 0.8.
-            lp.alpha = prefs.opacity.coerceAtMost(0.8f)
-            wm.addView(v, lp)
-        }
+        // Per-block windows: boxes can be fully opaque while touches outside them pass through.
+        overlay = OverlayLayer(this, wm, alpha = prefs.opacity, fontScale = prefs.fontScale)
         bubble = BubbleController(this, wm, this).also { it.show(prefs.autoMode, prefs.comicMode) }
         compare = CompareView(this, wm)
         running = true
@@ -381,7 +368,7 @@ class CaptureService : Service(), BubbleController.Callbacks {
         running = false
         watchJob?.cancel(); translateJob?.cancel(); scope.cancel()
         compare?.hide(); bubble?.hide()
-        overlay?.let { runCatching { wm.removeView(it) } }
+        overlay?.destroy()
         virtualDisplay?.release(); reader?.close(); projection?.stop()
         lastBitmap?.recycle()
         super.onDestroy()
