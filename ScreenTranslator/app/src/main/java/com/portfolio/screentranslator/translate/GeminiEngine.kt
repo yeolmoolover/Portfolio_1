@@ -85,7 +85,14 @@ class GeminiEngine(
             .put("temperature", 0.2)
             .put("maxOutputTokens", 2048)
         if (!isGemma) gen.put("responseMimeType", "application/json")
-        if (withThinkingConfig) gen.put("thinkingConfig", JSONObject().put("thinkingBudget", 0))
+        if (withThinkingConfig) {
+            // Gemini 3.x: thinking cannot be turned off; "minimal" is the cheapest level.
+            // Gemini 2.5: thinkingBudget 0 turns it off. (thinkingBudget is rejected by 3.x.)
+            val model = modelProvider()
+            val cfg = if (model.startsWith("gemini-3")) JSONObject().put("thinkingLevel", "minimal")
+                      else JSONObject().put("thinkingBudget", 0)
+            gen.put("thinkingConfig", cfg)
+        }
         val body = JSONObject(base.toString()).put("generationConfig", gen)
         val request = Request.Builder()
             .url(url)
