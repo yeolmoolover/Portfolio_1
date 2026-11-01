@@ -1,0 +1,27 @@
+<resources>
+    <string name="app_name">화면 번역</string>
+    <string name="notif_channel">화면 번역 실행 중</string>
+    <string name="notif_title">화면 번역이 켜져 있습니다</string>
+    <string name="notif_text">플로팅 버튼으로 번역·자동 모드를 조절하세요</string>
+    <string name="start">번역 시작</string>
+    <string name="stop">번역 중지</string>
+    <string name="section_engine">번역 엔진</string>
+    <string name="section_display">표시</string>
+    <string name="section_keys">API 키</string>
+    <string name="gemini_key">Gemini API 키 (aistudio.google.com)</string>
+    <string name="claude_key">Claude API 키 (console.anthropic.com)</string>
+    <string name="primary_engine">기본 엔진</string>
+    <string name="gemini_model">Gemini 모델 ID</string>
+    <string name="gemma_model">Gemma 모델 ID (Gemini 한도 초과 시)</string>
+    <string name="claude_model">Claude 모델 ID</string>
+    <string name="source_lang">원문 언어</string>
+    <string name="comic_mode">만화 모드 (스크린샷도 함께 보내 효과음·오인식 보정)</string>
+    <string name="auto_mode">자동 모드 (화면이 멈추면 자동 번역)</string>
+    <string name="opacity">번역 배경 불투명도</string>
+    <string name="font_scale">글자 크기 배율</string>
+    <string name="usage_today">오늘 사용: Gemini %1$d회 · Gemma %2$d회 · Claude %3$d회 · ML Kit %4$d회</string>
+    <string name="perm_overlay">다른 앱 위에 표시 권한이 필요합니다</string>
+    <string name="perm_capture_denied">화면 캡처 권한이 거부되었습니다</string>
+    <string name="help">사용법: 시작을 누르면 화면 캡처 권한을 묻고 플로팅 버튼이 뜹니다.\n• 버튼 탭: 지금 화면 번역\n• 버튼 길게 누르기: 누르는 동안 원문 보기\n• 자동 모드: 스크롤이 멈출 때마다 자동 번역 (같은 화면은 저장해 재사용)\n• 비교: 두 엔진 결과를 나란히 보기\n• ML Kit 번역 모델(영·일·중→한)은 처음 쓸 때 자동 다운로드됩니다.</string>
+    <string name="download_mlkit">ML Kit 오프라인 번역 모델 미리 받기</string>
+</resources>

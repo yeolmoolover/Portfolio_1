@@ -1,0 +1,24 @@
+<resources>
+    <string-array name="engines">
+        <item>Gemini (무료 티어 가능)</item>
+        <item>Claude</item>
+        <item>ML Kit (오프라인, 품질 낮음)</item>
+    </string-array>
+    <string-array name="engine_values">
+        <item>gemini</item>
+        <item>claude</item>
+        <item>mlkit</item>
+    </string-array>
+    <string-array name="source_langs">
+        <item>자동 (일본어/중국어/영어)</item>
+        <item>일본어</item>
+        <item>중국어</item>
+        <item>영어</item>
+    </string-array>
+    <string-array name="source_lang_values">
+        <item>auto</item>
+        <item>ja</item>
+        <item>zh</item>
+        <item>en</item>
+    </string-array>
+</resources>

@@ -1,0 +1,124 @@
+package com.portfolio.screentranslator
+
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.projection.MediaProjectionManager
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.provider.Settings
+import android.widget.ArrayAdapter
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.slider.Slider
+import com.google.android.material.switchmaterial.SwitchMaterial
+import com.google.android.material.textfield.MaterialAutoCompleteTextView
+import com.google.android.material.textfield.TextInputEditText
+import com.portfolio.screentranslator.translate.MlKitEngine
+import kotlinx.coroutines.launch
+
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var prefs: Prefs
+
+    private val projectionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+        val data = res.data
+        if (res.resultCode != RESULT_OK || data == null) {
+            Toast.makeText(this, R.string.perm_capture_denied, Toast.LENGTH_SHORT).show(); return@registerForActivityResult
+        }
+        val i = Intent(this, CaptureService::class.java)
+            .setAction(CaptureService.ACTION_START)
+            .putExtra(CaptureService.EXTRA_RESULT_CODE, res.resultCode)
+            .putExtra(CaptureService.EXTRA_RESULT_DATA, data)
+        ContextCompat.startForegroundService(this, i)
+        finish()   // get out of the way so the user is back on the app they want translated
+    }
+
+    private val notifLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        prefs = Prefs(this)
+        setContentView(R.layout.activity_main)
+
+        val geminiKey = findViewById<TextInputEditText>(R.id.gemini_key).apply { setText(prefs.geminiKey) }
+        val claudeKey = findViewById<TextInputEditText>(R.id.claude_key).apply { setText(prefs.claudeKey) }
+        val geminiModel = findViewById<TextInputEditText>(R.id.gemini_model).apply { setText(prefs.geminiModel) }
+        val gemmaModel = findViewById<TextInputEditText>(R.id.gemma_model).apply { setText(prefs.gemmaModel) }
+        val claudeModel = findViewById<TextInputEditText>(R.id.claude_model).apply { setText(prefs.claudeModel) }
+
+        val engineValues = resources.getStringArray(R.array.engine_values)
+        val engineLabels = resources.getStringArray(R.array.engines)
+        val engine = findViewById<MaterialAutoCompleteTextView>(R.id.engine).apply {
+            setAdapter(ArrayAdapter(context, android.R.layout.simple_list_item_1, engineLabels))
+            setText(engineLabels[engineValues.indexOf(prefs.primaryEngine).coerceAtLeast(0)], false)
+        }
+        val langValues = resources.getStringArray(R.array.source_lang_values)
+        val langLabels = resources.getStringArray(R.array.source_langs)
+        val lang = findViewById<MaterialAutoCompleteTextView>(R.id.source_lang).apply {
+            setAdapter(ArrayAdapter(context, android.R.layout.simple_list_item_1, langLabels))
+            setText(langLabels[langValues.indexOf(prefs.sourceLang).coerceAtLeast(0)], false)
+        }
+        val comic = findViewById<SwitchMaterial>(R.id.comic_mode).apply { isChecked = prefs.comicMode }
+        val auto = findViewById<SwitchMaterial>(R.id.auto_mode).apply { isChecked = prefs.autoMode }
+        val opacity = findViewById<Slider>(R.id.opacity).apply { value = prefs.opacity }
+        val fontScale = findViewById<Slider>(R.id.font_scale).apply { value = prefs.fontScale }
+
+        fun save() {
+            prefs.geminiKey = geminiKey.text.toString()
+            prefs.claudeKey = claudeKey.text.toString()
+            prefs.geminiModel = geminiModel.text.toString().ifBlank { "gemini-3.5-flash-lite" }
+            prefs.gemmaModel = gemmaModel.text.toString().ifBlank { "gemma-4-31b-it" }
+            prefs.claudeModel = claudeModel.text.toString().ifBlank { "claude-haiku-5-5" }
+            prefs.primaryEngine = engineValues[engineLabels.indexOf(engine.text.toString()).coerceAtLeast(0)]
+            prefs.sourceLang = langValues[langLabels.indexOf(lang.text.toString()).coerceAtLeast(0)]
+            prefs.comicMode = comic.isChecked
+            prefs.autoMode = auto.isChecked
+            prefs.opacity = opacity.value
+            prefs.fontScale = fontScale.value
+        }
+
+        findViewById<MaterialButton>(R.id.btn_start).setOnClickListener {
+            save()
+            if (!Settings.canDrawOverlays(this)) {
+                Toast.makeText(this, R.string.perm_overlay, Toast.LENGTH_LONG).show()
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+                return@setOnClickListener
+            }
+            if (Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            if (prefs.primaryEngine == "gemini" && prefs.geminiKey.isBlank() && prefs.claudeKey.isBlank()) {
+                Toast.makeText(this, "API 키가 없어 ML Kit(오프라인)만 사용합니다", Toast.LENGTH_LONG).show()
+            }
+            val mpm = getSystemService(MediaProjectionManager::class.java)
+            projectionLauncher.launch(mpm.createScreenCaptureIntent())
+        }
+        findViewById<MaterialButton>(R.id.btn_stop).setOnClickListener {
+            startService(Intent(this, CaptureService::class.java).setAction(CaptureService.ACTION_STOP))
+        }
+        findViewById<MaterialButton>(R.id.btn_download_mlkit).setOnClickListener { v ->
+            v.isEnabled = false
+            lifecycleScope.launch {
+                runCatching { MlKitEngine().downloadAll(wifiOnly = false) }
+                    .onSuccess { Toast.makeText(this@MainActivity, "ML Kit 모델 준비 완료", Toast.LENGTH_SHORT).show() }
+                    .onFailure { Toast.makeText(this@MainActivity, "다운로드 실패: ${it.message}", Toast.LENGTH_LONG).show() }
+                v.isEnabled = true
+            }
+        }
+        updateUsage()
+    }
+
+    override fun onResume() { super.onResume(); updateUsage() }
+
+    private fun updateUsage() {
+        findViewById<android.widget.TextView>(R.id.usage).text = getString(
+            R.string.usage_today, prefs.usage("gemini"), prefs.usage("gemma"), prefs.usage("claude"), prefs.usage("mlkit"),
+        )
+    }
+}

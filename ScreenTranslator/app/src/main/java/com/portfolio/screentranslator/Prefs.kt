@@ -1,0 +1,91 @@
+package com.portfolio.screentranslator
+
+import android.content.Context
+import android.content.SharedPreferences
+import java.time.LocalDate
+import java.time.ZoneId
+
+/** All user settings + daily usage counters. */
+class Prefs(context: Context) {
+    private val sp: SharedPreferences =
+        context.applicationContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
+
+    var geminiKey: String
+        get() = sp.getString("gemini_key", "") ?: ""
+        set(v) = sp.edit().putString("gemini_key", v.trim()).apply()
+
+    var claudeKey: String
+        get() = sp.getString("claude_key", "") ?: ""
+        set(v) = sp.edit().putString("claude_key", v.trim()).apply()
+
+    /** gemini | claude | mlkit */
+    var primaryEngine: String
+        get() = sp.getString("primary_engine", "gemini") ?: "gemini"
+        set(v) = sp.edit().putString("primary_engine", v).apply()
+
+    // Free-tier limits seen in AI Studio (2026-11): 3.5 Flash-Lite = 500 RPD, Flash models = 20 RPD.
+    var geminiModel: String
+        get() = sp.getString("gemini_model", "gemini-3.5-flash-lite") ?: "gemini-3.5-flash-lite"
+        set(v) = sp.edit().putString("gemini_model", v.trim()).apply()
+
+    // Gemma 4 31B shows 14,400 RPD on the free tier. The exact API model id was not verified;
+    // edit it in settings if the API returns "model not found".
+    var gemmaModel: String
+        get() = sp.getString("gemma_model", "gemma-4-31b-it") ?: "gemma-4-31b-it"
+        set(v) = sp.edit().putString("gemma_model", v.trim()).apply()
+
+    var claudeModel: String
+        get() = sp.getString("claude_model", "claude-haiku-5-5") ?: "claude-haiku-5-5"
+        set(v) = sp.edit().putString("claude_model", v.trim()).apply()
+
+    /** auto | ja | zh | en */
+    var sourceLang: String
+        get() = sp.getString("source_lang", "auto") ?: "auto"
+        set(v) = sp.edit().putString("source_lang", v).apply()
+
+    var comicMode: Boolean
+        get() = sp.getBoolean("comic_mode", true)
+        set(v) = sp.edit().putBoolean("comic_mode", v).apply()
+
+    var autoMode: Boolean
+        get() = sp.getBoolean("auto_mode", true)
+        set(v) = sp.edit().putBoolean("auto_mode", v).apply()
+
+    /** 0.3 .. 0.8 — Android 12+ blocks touch pass-through above 0.8 opacity. */
+    var opacity: Float
+        get() = sp.getFloat("opacity", 0.8f)
+        set(v) = sp.edit().putFloat("opacity", v.coerceIn(0.3f, 0.8f)).apply()
+
+    var fontScale: Float
+        get() = sp.getFloat("font_scale", 1.0f)
+        set(v) = sp.edit().putFloat("font_scale", v.coerceIn(0.6f, 1.6f)).apply()
+
+    // ---- daily usage counters (reset at Pacific midnight, matching Gemini's RPD reset) ----
+
+    private fun todayKey(): String =
+        LocalDate.now(ZoneId.of("America/Los_Angeles")).toString()
+
+    fun usage(engine: String): Int {
+        val day = sp.getString("usage_day", "")
+        if (day != todayKey()) return 0
+        return sp.getInt("usage_$engine", 0)
+    }
+
+    fun bumpUsage(engine: String) {
+        val today = todayKey()
+        val e = sp.edit()
+        if (sp.getString("usage_day", "") != today) {
+            e.putString("usage_day", today)
+            for (k in listOf("gemini", "gemma", "claude", "mlkit")) e.putInt("usage_$k", 0)
+        }
+        e.putInt("usage_$engine", usage(engine) + 1).apply()
+    }
+
+    /** When Gemini returned 429 today we remember it so we stop hammering it until tomorrow. */
+    var geminiExhaustedDay: String
+        get() = sp.getString("gemini_exhausted", "") ?: ""
+        set(v) = sp.edit().putString("gemini_exhausted", v).apply()
+
+    val geminiExhaustedToday: Boolean get() = geminiExhaustedDay == todayKey()
+    fun markGeminiExhausted() { geminiExhaustedDay = todayKey() }
+}
