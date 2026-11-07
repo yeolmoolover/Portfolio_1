@@ -48,6 +48,26 @@ object ImageUtil {
         return sum / a.size
     }
 
+    /**
+     * Copy with boosted contrast for OCR only: scanlations often use thin light-grey type that
+     * the recogniser misses or only partly detects. Mid greys are pushed towards black.
+     */
+    fun boostForOcr(src: Bitmap): Bitmap {
+        val out = Bitmap.createBitmap(src.width, src.height, Bitmap.Config.ARGB_8888)
+        val canvas = android.graphics.Canvas(out)
+        val c = 1.9f                      // contrast
+        val t = 128f * (1f - c) - 25f     // keep white white-ish, pull greys down
+        val cm = android.graphics.ColorMatrix(floatArrayOf(
+            c, 0f, 0f, 0f, t,
+            0f, c, 0f, 0f, t,
+            0f, 0f, c, 0f, t,
+            0f, 0f, 0f, 1f, 0f,
+        ))
+        val paint = android.graphics.Paint().apply { colorFilter = android.graphics.ColorMatrixColorFilter(cm) }
+        canvas.drawBitmap(src, 0f, 0f, paint)
+        return out
+    }
+
     /** JPEG with the long edge limited to [maxLongEdge] px (keeps LLM image tokens small). */
     fun toJpeg(bmp: Bitmap, maxLongEdge: Int, quality: Int = 70): Triple<ByteArray, Int, Int> {
         val scale = min(1f, maxLongEdge.toFloat() / max(bmp.width, bmp.height))

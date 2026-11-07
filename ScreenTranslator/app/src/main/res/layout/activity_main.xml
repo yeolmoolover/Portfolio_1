@@ -198,6 +198,12 @@
                 android:inputType="none" />
         </com.google.android.material.textfield.TextInputLayout>
 
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/debug_boxes"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/debug_boxes" />
+
         <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/font_scale" />
         <com.google.android.material.slider.Slider
             android:id="@+id/font_scale"

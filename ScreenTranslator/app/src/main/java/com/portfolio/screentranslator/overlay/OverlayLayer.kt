@@ -24,6 +24,7 @@ class OverlayLayer(
     private val alpha: Float,
     private val fontScale: Float,
     private val outlineStyle: Boolean = false,
+    private val debug: Boolean = false,
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val views = ArrayList<OverlayView>()
@@ -50,6 +51,7 @@ class OverlayLayer(
         val v = OverlayView(context).apply {
             fontScale = this@OverlayLayer.fontScale
             outlineStyle = this@OverlayLayer.outlineStyle
+            debug = this@OverlayLayer.debug
             blocks = listOf(shifted)
         }
         val lp = WindowManager.LayoutParams(

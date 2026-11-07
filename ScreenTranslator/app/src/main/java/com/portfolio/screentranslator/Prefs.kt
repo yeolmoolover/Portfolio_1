@@ -65,6 +65,11 @@ class Prefs(context: Context) {
         get() = sp.getString("text_style2", "outline") ?: "outline"
         set(v) = sp.edit().putString("text_style2", v).apply()
 
+    /** Draw the OCR boxes (red) and erase areas (blue) to diagnose coverage problems. */
+    var debugBoxes: Boolean
+        get() = sp.getBoolean("debug_boxes", false)
+        set(v) = sp.edit().putBoolean("debug_boxes", v).apply()
+
     var fontScale: Float
         get() = sp.getFloat("font_scale", 1.0f)
         set(v) = sp.edit().putFloat("font_scale", v.coerceIn(0.6f, 1.6f)).apply()

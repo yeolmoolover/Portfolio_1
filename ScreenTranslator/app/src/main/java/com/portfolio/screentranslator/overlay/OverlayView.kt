@@ -32,6 +32,10 @@ class OverlayView(context: Context) : View(context) {
     /** false = opaque panel behind the text, true = outline (halo) only. */
     var outlineStyle = false
 
+    /** Diagnostic: red = OCR line boxes, blue = block box, green = translation box. */
+    var debug = false
+    private val debugPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 3f }
+
     private val boxPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
     private val strokePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -74,6 +78,14 @@ class OverlayView(context: Context) : View(context) {
         }
 
         drawText(canvas, b, pad)
+        if (debug) {
+            debugPaint.color = Color.RED
+            for (l in b.lines) canvas.drawRect(l, debugPaint)
+            debugPaint.color = Color.BLUE
+            canvas.drawRect(b.srcBox, debugPaint)
+            debugPaint.color = Color.GREEN
+            canvas.drawRect(b.box, debugPaint)
+        }
     }
 
     private fun drawText(canvas: Canvas, b: TranslatedBlock, pad: Float) {

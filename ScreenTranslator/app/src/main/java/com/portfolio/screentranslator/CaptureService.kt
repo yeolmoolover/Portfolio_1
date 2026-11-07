@@ -200,7 +200,7 @@ class CaptureService : Service() {
         )
 
         // Per-block windows: boxes can be fully opaque while touches outside them pass through.
-        overlay = OverlayLayer(this, wm, alpha = 1f, fontScale = prefs.fontScale, outlineStyle = prefs.textStyle == "outline")
+        overlay = OverlayLayer(this, wm, alpha = 1f, fontScale = prefs.fontScale, outlineStyle = prefs.textStyle == "outline", debug = prefs.debugBoxes)
         compare = CompareView(this, wm)
         topBar = TopBar(
             this, wm, statusBarHeight(),
@@ -291,7 +291,8 @@ class CaptureService : Service() {
         topBar?.setBusy(true)
         try {
             val t0 = System.currentTimeMillis()
-            val ocrResult = ocr.recognise(bmp, prefs.sourceLang)
+            val ocrInput = ImageUtil.boostForOcr(bmp)
+            val ocrResult = try { ocr.recognise(ocrInput, prefs.sourceLang) } finally { ocrInput.recycle() }
             val tOcr = System.currentTimeMillis() - t0
             val topInset = statusBarHeight()
             val barRect = topBar?.bounds()
