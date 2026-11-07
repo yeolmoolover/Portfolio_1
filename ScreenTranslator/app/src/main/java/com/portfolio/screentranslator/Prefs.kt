@@ -20,8 +20,8 @@ class Prefs(context: Context) {
 
     /** gemini | claude */
     var primaryEngine: String
-        get() = (sp.getString("primary_engine", "gemini") ?: "gemini").let { if (it == "mlkit") "gemini" else it }
-        set(v) = sp.edit().putString("primary_engine", v).apply()
+        get() = (sp.getString("primary_engine2", "claude") ?: "claude").let { if (it == "mlkit") "gemini" else it }
+        set(v) = sp.edit().putString("primary_engine2", v).apply()
 
     // Free-tier limits seen in AI Studio (2026-11): 3.5 Flash-Lite = 500 RPD, Flash models = 20 RPD.
     var geminiModel: String

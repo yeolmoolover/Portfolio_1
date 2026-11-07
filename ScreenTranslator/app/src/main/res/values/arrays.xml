@@ -1,11 +1,11 @@
 <resources>
     <string-array name="engines">
+        <item>Claude (Haiku 5.5 기본, 유료)</item>
         <item>Gemini (무료 티어 가능)</item>
-        <item>Claude</item>
     </string-array>
     <string-array name="engine_values">
-        <item>gemini</item>
         <item>claude</item>
+        <item>gemini</item>
     </string-array>
     <string-array name="text_styles">
         <item>외곽선 (원문만 지우고, 번역문은 테두리 글자로)</item>
