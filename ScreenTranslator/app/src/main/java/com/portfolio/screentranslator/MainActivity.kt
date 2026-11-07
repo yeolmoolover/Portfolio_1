@@ -13,6 +13,8 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.Slider
@@ -45,6 +47,13 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
         setContentView(R.layout.activity_main)
+        // targetSdk 35 draws edge-to-edge: keep content below the status bar / above the nav bar.
+        val root = findViewById<android.view.View>(R.id.root)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+            insets
+        }
 
         val geminiKey = findViewById<TextInputEditText>(R.id.gemini_key).apply { setText(prefs.geminiKey) }
         val claudeKey = findViewById<TextInputEditText>(R.id.claude_key).apply { setText(prefs.claudeKey) }

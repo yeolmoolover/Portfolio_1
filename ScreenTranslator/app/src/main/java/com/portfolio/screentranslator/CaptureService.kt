@@ -199,7 +199,7 @@ class CaptureService : Service() {
         overlay = OverlayLayer(this, wm, alpha = prefs.opacity, fontScale = prefs.fontScale)
         compare = CompareView(this, wm)
         running = true
-        setStatus(if (prefs.autoMode) "자동 모드: 화면이 멈추면 번역합니다" else "음량 아래 길게 누르기 / 알림의 '번역'으로 번역")
+        setStatus(if (prefs.autoMode) "자동 모드: 화면이 멈추면 번역합니다" else "음량 아래 버튼 / 알림의 '번역'으로 번역")
         startWatching()
     }
 
@@ -358,7 +358,7 @@ class CaptureService : Service() {
         showingOriginal = !showingOriginal
         if (showingOriginal) {
             main.post { overlay?.blocks = emptyList() }
-            setStatus("원문 표시 중 (음량 위 길게 / 알림 '번역 보기'로 복귀)")
+            setStatus("원문 표시 중 (음량 위 / 알림 '번역 보기'로 복귀)")
         } else {
             scope.launch { showOverlay(currentBlocks) }
             setStatus(prefs.lastStatus.substringBefore("\n원문"))
