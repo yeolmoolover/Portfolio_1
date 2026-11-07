@@ -30,7 +30,7 @@ class PromptBuilderTest {
     @Test
     fun userTextListsBlocksAndHistory() {
         val req = TranslationRequest(
-            blocks = listOf(SourceBlock(1, "こんにちは", android.graphics.Rect(), vertical = true, lines = emptyList(), lineHeight = 0)),
+            blocks = listOf(SourceBlock(1, "こんにちは", android.graphics.Rect(), vertical = true, lines = emptyList(), lineHeight = 0, hintX = 0)),
             imageJpeg = null, imageWidth = 0, imageHeight = 0, screenWidth = 1, screenHeight = 1,
             sourceLangHint = "ja", history = listOf("前" to "이전"),
         )
