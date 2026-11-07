@@ -290,7 +290,9 @@ class CaptureService : Service() {
         busy = true
         topBar?.setBusy(true)
         try {
+            val t0 = System.currentTimeMillis()
             val ocrResult = ocr.recognise(bmp, prefs.sourceLang)
+            val tOcr = System.currentTimeMillis() - t0
             val topInset = statusBarHeight()
             val barRect = topBar?.bounds()
             val blocks = ocrResult.blocks.filter { it.box.bottom > topInset + 4 }
@@ -307,7 +309,9 @@ class CaptureService : Service() {
             val req = buildRequest(bmp, blocks, comic)
             val key = chain.cacheKey(req, comic)
             val cachedHit = chain.cached(key) != null
+            val t1 = System.currentTimeMillis()
             val result = chain.translate(req, key)
+            val tApi = System.currentTimeMillis() - t1
             val drawn = toDrawable(bmp, blocks, result)
             currentBlocks = drawn
             lastTranslatedFp = fp
@@ -317,6 +321,8 @@ class CaptureService : Service() {
             val status = buildString {
                 append(if (cachedHit) "저장된 번역" else result.engineUsed)
                 append(" · ").append(drawn.size).append("개 블록")
+                append(" · 인식 ").append(tOcr).append("ms · 번역 ").append(tApi).append("ms")
+                if (comic) append(" (만화 모드: 스크린샷 포함)")
                 chain.lastError?.let { append("\n대체됨: ").append(it) }
             }
             setStatus(status)
@@ -337,7 +343,7 @@ class CaptureService : Service() {
      */
     private suspend fun showOverlay(blocks: List<TranslatedBlock>) {
         withContext(Dispatchers.Main) { overlay?.blocks = blocks }
-        delay(350)
+        delay(150)
         val after = grabFrame() ?: return
         val fp = ImageUtil.fingerprint(after)
         after.recycle()

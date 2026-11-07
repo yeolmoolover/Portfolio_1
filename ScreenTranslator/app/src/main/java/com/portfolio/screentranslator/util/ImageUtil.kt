@@ -72,15 +72,13 @@ object ImageUtil {
         outer.top = outer.top.coerceIn(0, bmp.height - 1); outer.bottom = outer.bottom.coerceIn(1, bmp.height)
 
         val bgHist = HashMap<Int, Int>()
-        fun addRing(x: Int, y: Int) {
-            if (x < 0 || y < 0 || x >= bmp.width || y >= bmp.height) return
-            val q = quantize(bmp.getPixel(x, y))
-            bgHist[q] = (bgHist[q] ?: 0) + 1
-        }
-        var x = outer.left
-        while (x < outer.right) { addRing(x, outer.top); addRing(x, outer.bottom - 1); x += 2 }
-        var y = outer.top
-        while (y < outer.bottom) { addRing(outer.left, y); addRing(outer.right - 1, y); y += 2 }
+        fun addAll(px: IntArray, n: Int) { var i = 0; while (i < n) { val q = quantize(px[i]); bgHist[q] = (bgHist[q] ?: 0) + 1; i += 2 } }
+        val w = outer.width(); val h = outer.height()
+        val row = IntArray(w); val col = IntArray(h)
+        bmp.getPixels(row, 0, w, outer.left, outer.top, w, 1); addAll(row, w)
+        bmp.getPixels(row, 0, w, outer.left, outer.bottom - 1, w, 1); addAll(row, w)
+        bmp.getPixels(col, 0, 1, outer.left, outer.top, 1, h); addAll(col, h)
+        bmp.getPixels(col, 0, 1, outer.right - 1, outer.top, 1, h); addAll(col, h)
         val bg = bgHist.maxByOrNull { it.value }?.key ?: 0xFFFFFFFF.toInt()
         val bgLum = luminance(bg)
 
