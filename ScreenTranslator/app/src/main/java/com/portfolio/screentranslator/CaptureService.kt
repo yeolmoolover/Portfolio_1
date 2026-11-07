@@ -150,17 +150,13 @@ class CaptureService : Service() {
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        // Notification row: status text + a single stop (X) button. Translate / original live on the top bar.
-        val row = android.widget.RemoteViews(packageName, R.layout.notif_controls).apply {
-            setOnClickPendingIntent(R.id.n_stop, pending(ACTION_STOP, 1))
-            setTextViewText(R.id.n_status, "화면 번역 실행 중 · " + status.substringBefore("\n"))
-        }
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_tile)
+            .setContentTitle("화면 번역 실행 중")
+            .setContentText(status.substringBefore("\n"))
+            .setStyle(Notification.BigTextStyle().bigText(status))
             .setContentIntent(open)
-            .setCustomContentView(row)
-            .setCustomBigContentView(row)
-            .setStyle(Notification.DecoratedCustomViewStyle())
+            .addAction(Notification.Action.Builder(null, "끄기", pending(ACTION_STOP, 1)).build())
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()
@@ -320,8 +316,6 @@ class CaptureService : Service() {
                 showOverlay(emptyList()); return
             }
             val req = buildRequest(bmp, blocks, comic)
-            val key = chain.cacheKey(req, comic)
-            val cachedHit = chain.cached(key) != null
             val placer = Placer(bmp, blocks, topBar?.bounds()?.bottom ?: topInset)
             var streamed = 0
             // Streamed items are placed and drawn immediately (one window each) so the first
@@ -334,7 +328,8 @@ class CaptureService : Service() {
                 }
             }
             val t1 = System.currentTimeMillis()
-            val result = chain.translate(req, key, if (cachedHit) null else onPartial)
+            val outcome = chain.translate(req, onPartial)
+            val result = outcome.result
             val tApi = System.currentTimeMillis() - t1
             placer.placeAll(result.items)                 // anything the stream did not cover
             val drawn = placer.placed.toList()
@@ -344,7 +339,8 @@ class CaptureService : Service() {
             showingOriginal = false
             topBar?.setShowingOriginal(false)
             val status = buildString {
-                append(if (cachedHit) "저장된 번역(요청 없음)" else result.engineUsed)
+                append(if (outcome.requested == 0) "저장된 번역(요청 없음)" else result.engineUsed)
+                if (outcome.fromCache > 0 && outcome.requested > 0) append(" · 저장됨 ").append(outcome.fromCache).append("개")
                 append(" · ").append(drawn.count { !it.isSfx }).append("/").append(blocks.size).append("개 블록")
                 val skippedAsSfx = result.items.count { !it.isSfx && it.text.isBlank() }
                 val missing = blocks.size - drawn.count { !it.isSfx } - skippedAsSfx

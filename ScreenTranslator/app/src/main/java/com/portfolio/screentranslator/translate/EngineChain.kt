@@ -15,15 +15,14 @@ import java.security.MessageDigest
  */
 class EngineChain(private val prefs: Prefs, context: Context? = null) {
 
-    /** On-disk copy of the cache so pages seen before never hit the network again. */
-    private val cacheFile: File? = context?.let { File(it.filesDir, "translation_cache.json") }
-
-    val gemini = GeminiEngine("gemini", { prefs.geminiKey }, { prefs.geminiModel })
-    val gemma = GeminiEngine("gemma", { prefs.geminiKey }, { prefs.gemmaModel }, isGemma = true)
-    val claude = ClaudeEngine({ prefs.claudeKey }, { prefs.claudeModel })
-
-    private val cache = object : LinkedHashMap<String, TranslationResult>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TranslationResult>?) = size > 3000
+    /**
+     * Block-level translation memory: normalised source text -> Korean. Persisted to disk, so a
+     * bubble seen before (same page revisited, or a repeated line) is filled instantly and only
+     * new bubbles are sent to the model.
+     */
+    private val cacheFile: File? = context?.let { File(it.filesDir, "block_cache.json") }
+    private val blockCache = object : LinkedHashMap<String, String>(256, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 20000
     }
     @Volatile private var dirty = false
 
@@ -33,46 +32,33 @@ class EngineChain(private val prefs: Prefs, context: Context? = null) {
         val f = cacheFile ?: return
         if (!f.exists()) return
         runCatching {
-            val arr = JSONArray(f.readText())
-            synchronized(cache) {
-                for (i in 0 until arr.length()) {
-                    val o = arr.getJSONObject(i)
-                    val items = o.getJSONArray("items")
-                    val list = ArrayList<TranslatedText>()
-                    for (j in 0 until items.length()) {
-                        val it = items.getJSONObject(j)
-                        val box = it.optJSONArray("box")?.let { b -> FloatArray(b.length()) { k -> b.optDouble(k).toFloat() } }
-                        list += TranslatedText(if (it.has("id")) it.getInt("id") else null, it.getString("ko"), box, it.optBoolean("sfx", false))
-                    }
-                    cache[o.getString("key")] = TranslationResult(list, o.optString("engine", "cache"))
-                }
-            }
+            val o = JSONObject(f.readText())
+            synchronized(blockCache) { for (k in o.keys()) blockCache[k] = o.getString(k) }
         }.onFailure { Log.w("EngineChain", "cache load failed", it) }
     }
 
-    /** Writes the cache to disk (called after each new translation; cheap at this size). */
     fun saveCache() {
         val f = cacheFile ?: return
         if (!dirty) return
-        val arr = JSONArray()
-        synchronized(cache) {
-            for ((k, v) in cache) {
-                val items = JSONArray()
-                for (t in v.items) {
-                    val o = JSONObject().put("ko", t.text).put("sfx", t.isSfx)
-                    t.sourceId?.let { o.put("id", it) }
-                    t.boxNorm?.let { b -> o.put("box", JSONArray().apply { b.forEach { put(it.toDouble()) } }) }
-                    items.put(o)
-                }
-                arr.put(JSONObject().put("key", k).put("engine", v.engineUsed).put("items", items))
-            }
-        }
-        runCatching { File(f.path + ".tmp").apply { writeText(arr.toString()) }.renameTo(f) }
+        val o = JSONObject()
+        synchronized(blockCache) { for ((k, v) in blockCache) o.put(k, v) }
+        runCatching { File(f.path + ".tmp").apply { writeText(o.toString()) }.renameTo(f) }
             .onFailure { Log.w("EngineChain", "cache save failed", it) }
         dirty = false
     }
 
-    fun cacheSize(): Int = synchronized(cache) { cache.size }
+    fun cacheSize(): Int = synchronized(blockCache) { blockCache.size }
+
+    /** Normalise OCR text so small recognition differences still hit the same entry. */
+    private fun norm(text: String): String =
+        text.filter { it.isLetterOrDigit() }.lowercase()
+
+    private fun lookup(text: String): String? = synchronized(blockCache) { blockCache[norm(text)] }
+
+    val gemini = GeminiEngine("gemini", { prefs.geminiKey }, { prefs.geminiModel })
+    val gemma = GeminiEngine("gemma", { prefs.geminiKey }, { prefs.gemmaModel }, isGemma = true)
+    val claude = ClaudeEngine({ prefs.claudeKey }, { prefs.claudeModel })
+
 
     private val history = ArrayDeque<Pair<String, String>>()
 
@@ -94,20 +80,42 @@ class EngineChain(private val prefs: Prefs, context: Context? = null) {
         return list
     }
 
-    fun cacheKey(req: TranslationRequest, comic: Boolean): String {
-        val md = MessageDigest.getInstance("SHA-1")
-        md.update(if (comic) 1 else 0)
-        for (b in req.blocks) md.update(b.text.toByteArray())
-        return md.digest().joinToString("") { "%02x".format(it) }
-    }
-
-    fun cached(key: String): TranslationResult? = synchronized(cache) { cache[key] }
 
     fun historySnapshot(): List<Pair<String, String>> = synchronized(history) { history.toList() }
 
-    /** Runs the chain. Throws only when every engine failed. */
-    suspend fun translate(req: TranslationRequest, cacheKey: String, onPartial: ((TranslatedText) -> Unit)? = null): TranslationResult {
-        cached(cacheKey)?.let { return it }
+    /** Outcome of the cache split for the status line. */
+    class Outcome(val result: TranslationResult, val fromCache: Int, val requested: Int)
+
+    /**
+     * Fills blocks that are already in the translation memory (calling [onPartial] for them at
+     * once), sends only the rest through the engine chain, and merges. Throws only when a
+     * request was needed and every engine failed.
+     */
+    suspend fun translate(req: TranslationRequest, onPartial: ((TranslatedText) -> Unit)? = null): Outcome {
+        val cachedItems = ArrayList<TranslatedText>()
+        val todo = ArrayList<SourceBlock>()
+        for (b in req.blocks) {
+            val ko = lookup(b.text)
+            if (ko != null) cachedItems += TranslatedText(b.id, ko, null, isSfx = false) else todo += b
+        }
+        for (t in cachedItems) onPartial?.invoke(t)
+        if (todo.isEmpty()) {
+            lastError = null
+            return Outcome(TranslationResult(cachedItems, "cache"), cachedItems.size, 0)
+        }
+        val sub = req.copy(blocks = todo)
+        val result = runChain(sub, onPartial)
+        // remember new translations (empty = model says SFX / not text; remember that too)
+        val byId = todo.associateBy { it.id }
+        synchronized(blockCache) {
+            for (t in result.items) if (!t.isSfx) byId[t.sourceId]?.let { blockCache[norm(it.text)] = t.text }
+        }
+        dirty = true
+        saveCache()
+        return Outcome(TranslationResult(cachedItems + result.items, result.engineUsed), cachedItems.size, todo.size)
+    }
+
+    private suspend fun runChain(req: TranslationRequest, onPartial: ((TranslatedText) -> Unit)?): TranslationResult {
         val errors = ArrayList<String>()
         for (engine in order()) {
             if (engine === gemini && prefs.geminiExhaustedToday) { errors += "gemini: 오늘 한도 소진"; continue }
@@ -118,9 +126,6 @@ class EngineChain(private val prefs: Prefs, context: Context? = null) {
                 val result = engine.translate(r, onPartial)
                 prefs.bumpUsage(engine.name)
                 remember(req, result)
-                synchronized(cache) { cache[cacheKey] = result }
-                dirty = true
-                saveCache()
                 lastError = if (errors.isEmpty()) null else errors.joinToString(" / ")
                 return result
             } catch (e: QuotaExceededException) {
@@ -128,6 +133,8 @@ class EngineChain(private val prefs: Prefs, context: Context? = null) {
                 errors += "${engine.name}: ${e.message}"
             } catch (e: EngineUnavailableException) {
                 errors += "${engine.name}: ${e.message}"
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w("EngineChain", "${engine.name} failed", e)
                 errors += "${engine.name}: ${e.javaClass.simpleName} ${e.message?.take(80)}"
