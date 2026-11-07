@@ -150,14 +150,10 @@ class CaptureService : Service() {
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        // Compact icon-button row (like auto-scroll apps): translate / original / auto / stop.
+        // Notification row: status text + a single stop (X) button. Translate / original live on the top bar.
         val row = android.widget.RemoteViews(packageName, R.layout.notif_controls).apply {
-            setOnClickPendingIntent(R.id.n_translate, pending(ACTION_TRANSLATE, 2))
-            setOnClickPendingIntent(R.id.n_original, pending(ACTION_TOGGLE_ORIGINAL, 3))
-            setOnClickPendingIntent(R.id.n_auto, pending(ACTION_TOGGLE_AUTO, 4))
             setOnClickPendingIntent(R.id.n_stop, pending(ACTION_STOP, 1))
-            setImageViewResource(R.id.n_auto, if (prefs.autoMode) R.drawable.ic_n_auto_on else R.drawable.ic_n_auto_off)
-            setTextViewText(R.id.n_status, status.substringBefore("\n"))
+            setTextViewText(R.id.n_status, "화면 번역 실행 중 · " + status.substringBefore("\n"))
         }
         return Notification.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_tile)
