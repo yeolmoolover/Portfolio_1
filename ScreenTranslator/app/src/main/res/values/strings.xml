@@ -15,7 +15,7 @@
     <string name="gemma_model">Gemma 모델 ID (Gemini 한도 초과 시)</string>
     <string name="claude_model">Claude 모델 ID</string>
     <string name="source_lang">번역할 언어 (선택한 언어의 글자만 번역)</string>
-    <string name="comic_mode">만화 모드 (스크린샷도 함께 보내 효과음·오인식 보정)</string>
+    <string name="comic_mode">만화 모드 (스크린샷도 함께 보내 효과음·오인식 보정 — 번역이 2~3배 느려짐)</string>
     <string name="auto_mode">자동 모드 (끄면: [번역] 버튼 → 번역, 화면 터치 → 지움)</string>
     <string name="font_scale">글자 크기 배율</string>
     <string name="text_style">번역문 표시 방식</string>

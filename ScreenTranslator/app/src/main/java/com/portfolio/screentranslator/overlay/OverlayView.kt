@@ -54,7 +54,8 @@ class OverlayView(context: Context) : View(context) {
         // anti-aliased edges and descenders of the original text stay visible.
         val pad = max(4 * density, b.lineHeight * 0.4f)
         val sorted = if (b.vertical) b.lines.sortedBy { it.left } else b.lines.sortedBy { it.top }
-        if (outlineStyle) { drawText(canvas, b, pad); return }   // outline mode: no fill anywhere
+        // Both styles erase the ORIGINAL text with the sampled background colour (on a plain
+        // bubble this is invisible). Only the box style also paints a panel behind the translation.
         if (b.vertical && sorted.isNotEmpty()) {
             // ML Kit returns vertical CJK text as irregular fragments; erase the whole source area.
             val all = Rect(b.srcBox); for (l in sorted) all.union(l)
@@ -98,7 +99,7 @@ class OverlayView(context: Context) : View(context) {
             // Thick halo in the background colour hides whatever is directly under the glyphs.
             strokePaint.textSize = textPaint.textSize
             strokePaint.color = b.bgColor
-            strokePaint.strokeWidth = max(4 * density, textPaint.textSize * 0.34f)
+            strokePaint.strokeWidth = max(2.5f * density, textPaint.textSize * 0.16f)
             strokePaint.isFakeBoldText = true
             StaticLayout.Builder.obtain(b.text, 0, b.text.length, strokePaint, max(1, b.box.width()))
                 .setAlignment(Layout.Alignment.ALIGN_CENTER).setIncludePad(false).build().draw(canvas)

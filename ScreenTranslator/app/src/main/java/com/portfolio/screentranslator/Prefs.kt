@@ -43,9 +43,11 @@ class Prefs(context: Context) {
         get() = (sp.getString("source_lang", "ja") ?: "ja").let { if (it == "auto") "ja" else it }
         set(v) = sp.edit().putString("source_lang", v).apply()
 
+    /** Sends the screenshot too (SFX detection, OCR fixes). Off by default: it is the
+     *  single biggest contributor to translation latency. */
     var comicMode: Boolean
-        get() = sp.getBoolean("comic_mode", true)
-        set(v) = sp.edit().putBoolean("comic_mode", v).apply()
+        get() = sp.getBoolean("comic_mode2", false)
+        set(v) = sp.edit().putBoolean("comic_mode2", v).apply()
 
     /** Auto mode re-translates whenever the screen settles. Off by default: the normal flow
      *  is volume-down -> translate, touch -> dismiss, volume-down again on the next page. */
@@ -60,8 +62,8 @@ class Prefs(context: Context) {
 
     /** box: opaque panel behind the translation. outline: no panel, thick halo around the glyphs. */
     var textStyle: String
-        get() = sp.getString("text_style", "outline") ?: "outline"
-        set(v) = sp.edit().putString("text_style", v).apply()
+        get() = sp.getString("text_style2", "outline") ?: "outline"
+        set(v) = sp.edit().putString("text_style2", v).apply()
 
     var fontScale: Float
         get() = sp.getFloat("font_scale", 1.0f)
