@@ -38,9 +38,9 @@ class Prefs(context: Context) {
         get() = sp.getString("claude_model", "claude-haiku-5-5") ?: "claude-haiku-5-5"
         set(v) = sp.edit().putString("claude_model", v.trim()).apply()
 
-    /** auto | ja | zh | en */
+    /** ja | zh | en - only text in this script is translated. */
     var sourceLang: String
-        get() = sp.getString("source_lang", "auto") ?: "auto"
+        get() = (sp.getString("source_lang", "ja") ?: "ja").let { if (it == "auto") "ja" else it }
         set(v) = sp.edit().putString("source_lang", v).apply()
 
     var comicMode: Boolean

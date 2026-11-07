@@ -10,13 +10,11 @@
         <item>mlkit</item>
     </string-array>
     <string-array name="source_langs">
-        <item>자동 (일본어/중국어/영어)</item>
-        <item>일본어</item>
-        <item>중국어</item>
-        <item>영어</item>
+        <item>일본어만 번역</item>
+        <item>중국어만 번역</item>
+        <item>영어만 번역</item>
     </string-array>
     <string-array name="source_lang_values">
-        <item>auto</item>
         <item>ja</item>
         <item>zh</item>
         <item>en</item>

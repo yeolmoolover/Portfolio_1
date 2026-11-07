@@ -51,7 +51,29 @@ class OcrEngine {
         val koreanRects = ko.await().textBlocks.flatMap { it.lines }
             .filter { isMostlyHangul(it.text) }
             .mapNotNull { it.boundingBox }
-        toBlocks(text, bitmap.width, bitmap.height, koreanRects)
+        toBlocks(text, bitmap.width, bitmap.height, koreanRects, sourceLang)
+    }
+
+    /** True when the block's letters are mostly in the script of [lang]. */
+    private fun matchesLanguage(s: String, lang: String): Boolean {
+        var kana = 0; var han = 0; var latin = 0; var letters = 0
+        for (ch in s) {
+            if (!ch.isLetter()) continue
+            letters++
+            val c = ch.code
+            when {
+                c in 0x3040..0x30FF -> kana++
+                c in 0x4E00..0x9FFF || c in 0x3400..0x4DBF -> han++
+                c < 0x0250 -> latin++
+            }
+        }
+        if (letters == 0) return false
+        return when (lang) {
+            "ja" -> kana > 0 || han * 2 > letters          // kanji-only blocks are also Japanese
+            "zh" -> han * 2 > letters && kana == 0
+            "en" -> latin * 2 > letters && kana == 0 && han == 0
+            else -> true
+        }
     }
 
     private fun score(t: Text): Int {
@@ -66,7 +88,7 @@ class OcrEngine {
         return total + kana * 3 + han
     }
 
-    private fun toBlocks(text: Text, w: Int, h: Int, koreanRects: List<Rect>): Result {
+    private fun toBlocks(text: Text, w: Int, h: Int, koreanRects: List<Rect>, lang: String): Result {
         val out = ArrayList<SourceBlock>()
         var korean = 0
         var id = 1
@@ -75,6 +97,7 @@ class OcrEngine {
             val s = block.text.trim()
             if (s.isEmpty() || !s.any { it.isLetter() }) continue
             if (isMostlyHangul(s)) { korean++; continue }
+            if (!matchesLanguage(s, lang)) continue
             val r = clamp(Rect(box), w, h)
             if (r.width() < 4 || r.height() < 4) continue
 
