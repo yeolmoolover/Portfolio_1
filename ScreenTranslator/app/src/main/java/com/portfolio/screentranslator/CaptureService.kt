@@ -378,21 +378,31 @@ class CaptureService : Service() {
         val byId = blocks.associateBy { it.id }
         val out = ArrayList<TranslatedBlock>()
         val gap = (6 * resources.displayMetrics.density).toInt()
-        /** Horizontal panel for a vertical block, widened only until it would hit a neighbour. */
+        /**
+         * Horizontal panel for a vertical block: as wide as the column height (what a bubble
+         * usually allows), at least ~4.5 glyphs wide, placed inside the free span between the
+         * neighbouring blocks at the same height - shifted sideways rather than squeezed.
+         */
         fun horizontalBox(src: SourceBlock): Rect {
             val cx = src.box.centerX(); val cy = src.box.centerY()
-            val want = maxOf(src.box.width(), (src.box.height() * 1.1f).toInt()).coerceAtMost((bmp.width * 0.8f).toInt())
-            var left = cx - want / 2; var right = cx + want / 2
-            val top = cy - src.box.height() / 2; val bottom = cy + src.box.height() / 2
+            val halfH = (src.box.height() * 0.65f).toInt()          // a bit taller than the columns
+            val top = (cy - halfH).coerceAtLeast(0); val bottom = (cy + halfH).coerceAtMost(bmp.height)
+            val minW = maxOf(src.box.width(), (src.lineHeight * 4.5f).toInt())
+            val want = maxOf(minW, (src.box.height() * 1.1f).toInt()).coerceAtMost((bmp.width * 0.8f).toInt())
+            // free horizontal span at this height
+            var spanL = 0; var spanR = bmp.width
             val others = blocks.filter { it.id != src.id }.map { it.box } + out.map { it.box }
             for (o in others) {
-                if (o.bottom <= top || o.top >= bottom) continue          // no vertical overlap
-                if (o.right <= src.box.left && o.right + gap > left) left = o.right + gap
-                if (o.left >= src.box.right && o.left - gap < right) right = o.left - gap
+                if (o.bottom <= top || o.top >= bottom) continue
+                if (o.right <= cx && o.right + gap > spanL) spanL = o.right + gap
+                if (o.left >= cx && o.left - gap < spanR) spanR = o.left - gap
             }
-            left = left.coerceAtLeast(0); right = right.coerceAtMost(bmp.width)
-            if (right - left < src.box.width()) { left = src.box.left; right = src.box.right }
-            return Rect(left, top, right, bottom)
+            val w = want.coerceAtMost(spanR - spanL).coerceAtLeast(minOf(minW, spanR - spanL))
+            var left = cx - w / 2
+            if (left < spanL) left = spanL
+            if (left + w > spanR) left = spanR - w
+            left = left.coerceAtLeast(0)
+            return Rect(left, top, left + w, bottom)
         }
         for (t in result.items) {
             if (t.isSfx) {

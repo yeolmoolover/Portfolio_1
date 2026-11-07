@@ -54,6 +54,11 @@ class OverlayView(context: Context) : View(context) {
         // anti-aliased edges and descenders of the original text stay visible.
         val pad = max(4 * density, b.lineHeight * 0.4f)
         val sorted = if (b.vertical) b.lines.sortedBy { it.left } else b.lines.sortedBy { it.top }
+        if (b.vertical && sorted.isNotEmpty()) {
+            // ML Kit returns vertical CJK text as irregular fragments; erase the whole source area.
+            val all = Rect(sorted[0]); for (l in sorted) all.union(l)
+            canvas.drawRoundRect(RectF(all).apply { inset(-pad * 1.2f, -pad * 1.2f) }, 4 * density, 4 * density, boxPaint)
+        }
         for (line in sorted) {
             canvas.drawRoundRect(RectF(line).apply { inset(-pad, -pad) }, 3 * density, 3 * density, boxPaint)
         }
