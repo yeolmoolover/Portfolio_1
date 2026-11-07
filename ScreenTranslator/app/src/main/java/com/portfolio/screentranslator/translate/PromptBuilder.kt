@@ -85,7 +85,7 @@ Respond with JSON only, matching this shape exactly:
         if (blocks != null) for (i in 0 until blocks.length()) {
             val o = blocks.optJSONObject(i) ?: continue
             val ko = o.optString("ko", "").trim()
-            if (ko.isEmpty()) continue
+            if (ko.isEmpty()) { out += TranslatedText(o.optInt("id", -1), "", null, isSfx = false); continue }  // model: not dialogue / SFX
             out += TranslatedText(o.optInt("id", -1), ko, null, isSfx = false)
         }
         val sfx: JSONArray? = obj.optJSONArray("sfx")

@@ -150,15 +150,21 @@ class CaptureService : Service() {
         val open = PendingIntent.getActivity(
             this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        // Compact icon-button row (like auto-scroll apps): translate / original / auto / stop.
+        val row = android.widget.RemoteViews(packageName, R.layout.notif_controls).apply {
+            setOnClickPendingIntent(R.id.n_translate, pending(ACTION_TRANSLATE, 2))
+            setOnClickPendingIntent(R.id.n_original, pending(ACTION_TOGGLE_ORIGINAL, 3))
+            setOnClickPendingIntent(R.id.n_auto, pending(ACTION_TOGGLE_AUTO, 4))
+            setOnClickPendingIntent(R.id.n_stop, pending(ACTION_STOP, 1))
+            setImageViewResource(R.id.n_auto, if (prefs.autoMode) R.drawable.ic_n_auto_on else R.drawable.ic_n_auto_off)
+            setTextViewText(R.id.n_status, status.substringBefore("\n"))
+        }
         return Notification.Builder(this, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_menu_edit)
-            .setContentTitle(getString(R.string.notif_title))
-            .setContentText(status)
-            .setStyle(Notification.BigTextStyle().bigText(status))
+            .setSmallIcon(R.drawable.ic_tile)
             .setContentIntent(open)
-            .addAction(Notification.Action.Builder(null, "번역", pending(ACTION_TRANSLATE, 2)).build())
-            .addAction(Notification.Action.Builder(null, if (showingOriginal) "번역 보기" else "원문 보기", pending(ACTION_TOGGLE_ORIGINAL, 3)).build())
-            .addAction(Notification.Action.Builder(null, getString(R.string.stop), pending(ACTION_STOP, 1)).build())
+            .setCustomContentView(row)
+            .setCustomBigContentView(row)
+            .setStyle(Notification.DecoratedCustomViewStyle())
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()
@@ -344,7 +350,9 @@ class CaptureService : Service() {
             val status = buildString {
                 append(if (cachedHit) "저장된 번역(요청 없음)" else result.engineUsed)
                 append(" · ").append(drawn.count { !it.isSfx }).append("/").append(blocks.size).append("개 블록")
-                val missing = blocks.size - drawn.count { !it.isSfx }
+                val skippedAsSfx = result.items.count { !it.isSfx && it.text.isBlank() }
+                val missing = blocks.size - drawn.count { !it.isSfx } - skippedAsSfx
+                if (skippedAsSfx > 0) append(" (효과음 제외 ").append(skippedAsSfx).append("개)")
                 if (missing > 0) append(" (").append(missing).append("개 누락)")
                 append(" · 인식 ").append(tOcr).append("ms · 번역 ").append(tApi).append("ms")
                 if (streamed > 0) append(" · 스트리밍 ").append(streamed).append("개")
@@ -469,6 +477,7 @@ class CaptureService : Service() {
                 return finish(b)
             }
             val src = byId[t.sourceId] ?: return null
+            if (t.text.isBlank()) return null                 // model marked it as SFX / not text
             if (placed.any { it.sourceId == src.id }) return null
             val (bg, fg) = ImageUtil.sampleColors(bmp, src.box)
             val b = if (src.vertical)

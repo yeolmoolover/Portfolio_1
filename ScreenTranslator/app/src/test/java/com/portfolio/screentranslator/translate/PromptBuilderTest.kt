@@ -15,8 +15,10 @@ class PromptBuilderTest {
         val items = PromptBuilder.parse(raw)
         val blocks = items.filter { !it.isSfx }
         val sfx = items.filter { it.isSfx }
-        assertEquals(listOf(1, 3), blocks.map { it.sourceId })
-        assertEquals("잘 가", blocks[1].text)
+        // id 2 came back empty: kept as an empty item so the caller can count it as "skipped"
+        assertEquals(listOf(1, 2, 3), blocks.map { it.sourceId })
+        assertEquals("", blocks[1].text)
+        assertEquals("잘 가", blocks[2].text)
         assertEquals(1, sfx.size)
         assertNull(sfx[0].sourceId)
         assertEquals(0.3f, sfx[0].boxNorm!![2], 1e-6f)
