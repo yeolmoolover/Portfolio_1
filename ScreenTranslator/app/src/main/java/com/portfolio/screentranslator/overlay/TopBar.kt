@@ -13,8 +13,8 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /**
- * Always-visible control bar pinned just below the status bar:
- *   [번역]  [원문 보기 / 번역 보기]  [✕]
+ * Always-visible full-width control bar pinned just below the status bar:
+ *   [    번역    |  원문 보기 / 번역 보기  |  ✕  ]
  * The window also has FLAG_WATCH_OUTSIDE_TOUCH, so any touch elsewhere on the screen is
  * reported through [onOutsideTouch] (used to dismiss the translation in manual mode);
  * touches on the bar itself are not "outside" and therefore never dismiss anything.
@@ -39,12 +39,14 @@ class TopBar(
     init {
         root.orientation = LinearLayout.HORIZONTAL
         root.gravity = Gravity.CENTER_VERTICAL
-        root.background = GradientDrawable().apply {
-            cornerRadius = 22 * d
-            setColor(Color.argb(215, 30, 30, 30))
-        }
-        root.setPadding((6 * d).toInt(), (4 * d).toInt(), (6 * d).toInt(), (4 * d).toInt())
-        root.addView(btnTranslate); root.addView(btnOriginal); root.addView(btnStop)
+        root.background = GradientDrawable().apply { setColor(Color.argb(225, 28, 28, 28)) }
+        root.setPadding(0, 0, 0, 0)
+        fun weight(w: Float) = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, w)
+        root.addView(btnTranslate, weight(2f))
+        root.addView(divider())
+        root.addView(btnOriginal, weight(2f))
+        root.addView(divider())
+        root.addView(btnStop, weight(1f))
         btnTranslate.setOnClickListener { onTranslate() }
         btnOriginal.setOnClickListener { onToggleOriginal() }
         btnStop.setOnClickListener { onStop() }
@@ -53,7 +55,7 @@ class TopBar(
             false
         }
         val lp = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -61,8 +63,8 @@ class TopBar(
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            y = topInsetPx + (4 * d).toInt()
+            gravity = Gravity.TOP or Gravity.START
+            y = topInsetPx
         }
         runCatching { wm.addView(root, lp); attached = true }
     }
@@ -71,8 +73,14 @@ class TopBar(
         this.text = text
         setTextColor(Color.WHITE)
         textSize = 15f
-        setPadding((16 * d).toInt(), (10 * d).toInt(), (16 * d).toInt(), (10 * d).toInt())
+        gravity = Gravity.CENTER
+        setPadding(0, (11 * d).toInt(), 0, (11 * d).toInt())
         isClickable = true
+    }
+
+    private fun divider() = android.view.View(context).apply {
+        setBackgroundColor(Color.argb(90, 255, 255, 255))
+        layoutParams = LinearLayout.LayoutParams(1, (24 * d).toInt())
     }
 
     /** Screen-space bounds of the bar, so its own label is excluded from OCR. */
