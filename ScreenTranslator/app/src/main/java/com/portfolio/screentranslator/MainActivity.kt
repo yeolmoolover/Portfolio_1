@@ -148,7 +148,8 @@ class MainActivity : AppCompatActivity() {
         findViewById<android.widget.TextView>(R.id.usage).text = getString(
             R.string.usage_today, prefs.usage("gemini"), prefs.usage("gemma"), prefs.usage("claude"),
         )
+        val cached = runCatching { org.json.JSONArray(java.io.File(filesDir, "translation_cache.json").readText()).length() }.getOrDefault(0)
         findViewById<android.widget.TextView>(R.id.last_status).text =
-            getString(R.string.last_status, prefs.lastStatus.ifBlank { "-" })
+            getString(R.string.last_status, prefs.lastStatus.ifBlank { "-" }) + "\n저장된 화면 번역: ${cached}개 (같은 화면은 요청 없이 즉시 표시)"
     }
 }

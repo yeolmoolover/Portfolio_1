@@ -1,7 +1,11 @@
 package com.portfolio.screentranslator.translate
 
+import android.content.Context
 import android.util.Log
 import com.portfolio.screentranslator.Prefs
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
 import java.security.MessageDigest
 
 /**
@@ -9,15 +13,66 @@ import java.security.MessageDigest
  *   primary (Gemini or Claude) -> Gemma (free, huge quota) -> the other LLM if it has a key.
  * Also caches results by the OCR text so re-visiting a screen costs nothing.
  */
-class EngineChain(private val prefs: Prefs) {
+class EngineChain(private val prefs: Prefs, context: Context? = null) {
+
+    /** On-disk copy of the cache so pages seen before never hit the network again. */
+    private val cacheFile: File? = context?.let { File(it.filesDir, "translation_cache.json") }
 
     val gemini = GeminiEngine("gemini", { prefs.geminiKey }, { prefs.geminiModel })
     val gemma = GeminiEngine("gemma", { prefs.geminiKey }, { prefs.gemmaModel }, isGemma = true)
     val claude = ClaudeEngine({ prefs.claudeKey }, { prefs.claudeModel })
 
     private val cache = object : LinkedHashMap<String, TranslationResult>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TranslationResult>?) = size > 200
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TranslationResult>?) = size > 3000
     }
+    @Volatile private var dirty = false
+
+    init { loadCache() }
+
+    private fun loadCache() {
+        val f = cacheFile ?: return
+        if (!f.exists()) return
+        runCatching {
+            val arr = JSONArray(f.readText())
+            synchronized(cache) {
+                for (i in 0 until arr.length()) {
+                    val o = arr.getJSONObject(i)
+                    val items = o.getJSONArray("items")
+                    val list = ArrayList<TranslatedText>()
+                    for (j in 0 until items.length()) {
+                        val it = items.getJSONObject(j)
+                        val box = it.optJSONArray("box")?.let { b -> FloatArray(b.length()) { k -> b.optDouble(k).toFloat() } }
+                        list += TranslatedText(if (it.has("id")) it.getInt("id") else null, it.getString("ko"), box, it.optBoolean("sfx", false))
+                    }
+                    cache[o.getString("key")] = TranslationResult(list, o.optString("engine", "cache"))
+                }
+            }
+        }.onFailure { Log.w("EngineChain", "cache load failed", it) }
+    }
+
+    /** Writes the cache to disk (called after each new translation; cheap at this size). */
+    fun saveCache() {
+        val f = cacheFile ?: return
+        if (!dirty) return
+        val arr = JSONArray()
+        synchronized(cache) {
+            for ((k, v) in cache) {
+                val items = JSONArray()
+                for (t in v.items) {
+                    val o = JSONObject().put("ko", t.text).put("sfx", t.isSfx)
+                    t.sourceId?.let { o.put("id", it) }
+                    t.boxNorm?.let { b -> o.put("box", JSONArray().apply { b.forEach { put(it.toDouble()) } }) }
+                    items.put(o)
+                }
+                arr.put(JSONObject().put("key", k).put("engine", v.engineUsed).put("items", items))
+            }
+        }
+        runCatching { File(f.path + ".tmp").apply { writeText(arr.toString()) }.renameTo(f) }
+            .onFailure { Log.w("EngineChain", "cache save failed", it) }
+        dirty = false
+    }
+
+    fun cacheSize(): Int = synchronized(cache) { cache.size }
 
     private val history = ArrayDeque<Pair<String, String>>()
 
@@ -64,6 +119,8 @@ class EngineChain(private val prefs: Prefs) {
                 prefs.bumpUsage(engine.name)
                 remember(req, result)
                 synchronized(cache) { cache[cacheKey] = result }
+                dirty = true
+                saveCache()
                 lastError = if (errors.isEmpty()) null else errors.joinToString(" / ")
                 return result
             } catch (e: QuotaExceededException) {

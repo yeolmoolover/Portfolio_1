@@ -114,7 +114,7 @@ class CaptureService : Service() {
         super.onCreate()
         prefs = Prefs(this)
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
-        chain = EngineChain(prefs)
+        chain = EngineChain(prefs, this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -342,7 +342,7 @@ class CaptureService : Service() {
             showingOriginal = false
             topBar?.setShowingOriginal(false)
             val status = buildString {
-                append(if (cachedHit) "저장된 번역" else result.engineUsed)
+                append(if (cachedHit) "저장된 번역(요청 없음)" else result.engineUsed)
                 append(" · ").append(drawn.count { !it.isSfx }).append("/").append(blocks.size).append("개 블록")
                 val missing = blocks.size - drawn.count { !it.isSfx }
                 if (missing > 0) append(" (").append(missing).append("개 누락)")
