@@ -116,7 +116,12 @@ class OverlayView(context: Context) : View(context) {
             // Thick halo in the background colour hides whatever is directly under the glyphs.
             strokePaint.textSize = textPaint.textSize
             strokePaint.color = b.bgColor
-            strokePaint.strokeWidth = max(2.5f * density, textPaint.textSize * 0.16f)
+            // Keep-original mode relies on the halo alone to hide what is under the text, so it is
+            // much wider there. The whole halo layer is drawn before the whole fill layer, so no
+            // line's halo can cover another line's glyphs.
+            strokePaint.strokeWidth = if (eraseOriginal) max(2.5f * density, textPaint.textSize * 0.16f)
+                                      else max(6f * density, textPaint.textSize * 0.5f)
+            strokePaint.strokeCap = Paint.Cap.ROUND
             strokePaint.isFakeBoldText = true
             StaticLayout.Builder.obtain(b.text, 0, b.text.length, strokePaint, max(1, b.box.width()))
                 .setAlignment(Layout.Alignment.ALIGN_CENTER).setIncludePad(false).build().draw(canvas)

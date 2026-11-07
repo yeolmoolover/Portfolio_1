@@ -50,7 +50,8 @@ class OverlayLayer(
 
     private fun addBlock(b: TranslatedBlock) {
         // Window = block box plus the largest padding the view may paint around a line.
-        val pad = (maxOf(6 * density, b.lineHeight * 0.55f)).toInt() + 1
+        // Room for the widest halo (keep-original mode: half of 0.5 x font size) plus erase padding.
+        val pad = (maxOf(6 * density, b.lineHeight * 0.55f, if (eraseOriginal) 0f else b.lineHeight * 0.4f)).toInt() + 1
         val r = Rect(b.box)
         r.union(b.srcBox)
         for (l in b.lines) r.union(l)
