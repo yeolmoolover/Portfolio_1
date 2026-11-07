@@ -51,3 +51,22 @@ class HangulSkipTest {
         assertEquals(false, com.portfolio.screentranslator.ocr.OcrEngine.isMostlyHangul("Hello world 123"))
     }
 }
+
+class IncrementalParserTest {
+    @Test
+    fun emitsEachBlockOnceAsChunksArrive() {
+        val got = ArrayList<TranslatedText>()
+        val p = PromptBuilder.IncrementalParser { got += it }
+        val full = """{"blocks":[{"id":1,"ko":"고마워\"요\""},{"id": 2 , "ko" : "잘 먹을게"},{"id":3,"ko":""}],"sfx":[{"ko":"쾅","box":[0.1,0.1,0.2,0.1]}]}"""
+        // feed in awkward pieces, including one that splits a JSON escape
+        val cuts = listOf(10, 25, 31, 44, 70, 90, full.length)
+        var prev = 0
+        for (c in cuts) { p.feed(full.substring(prev, c)); prev = c }
+        assertEquals(listOf(1, 2), got.map { it.sourceId })
+        assertEquals("고마워\"요\"", got[0].text)
+        assertEquals("잘 먹을게", got[1].text)
+        // feeding more text never re-emits
+        p.feed(" trailing")
+        assertEquals(2, got.size)
+    }
+}
