@@ -121,6 +121,10 @@ class CaptureService : Service() {
         when (intent?.action) {
             ACTION_STOP -> { hardStop(); return START_NOT_STICKY }
             ACTION_START -> {
+                // "번역 시작" pressed while already running (e.g. after changing settings):
+                // tear the old capture / bar / overlay down first, or they would be duplicated
+                // and the orphaned bar could never be dismissed.
+                if (running) teardown()
                 startForeground(NOTIF_ID, buildNotification(getString(R.string.notif_text)))
                 val code = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
                 @Suppress("DEPRECATION")
@@ -202,7 +206,7 @@ class CaptureService : Service() {
         // Per-block windows: boxes can be fully opaque while touches outside them pass through.
         overlay = OverlayLayer(
             this, wm, alpha = 1f, fontScale = prefs.fontScale,
-            outlineStyle = prefs.textStyle == "outline", debug = prefs.debugBoxes,
+            outlineStyle = prefs.textStyle != "box", eraseOriginal = prefs.textStyle != "keep", debug = prefs.debugBoxes,
             onTouch = { if (!prefs.autoMode && !showingOriginal) dismiss() },
         )
         compare = CompareView(this, wm)
@@ -611,23 +615,36 @@ class CaptureService : Service() {
      * stuck), kill the process from a plain thread so the bar and the capture always go away.
      */
     private fun hardStop() {
+        tornDown = false
         runCatching { stopSelf() }
         Thread {
             try { Thread.sleep(1200) } catch (_: InterruptedException) {}
-            if (running) android.os.Process.killProcess(android.os.Process.myPid())
+            if (!tornDown) android.os.Process.killProcess(android.os.Process.myPid())
         }.start()
     }
 
     private fun toast(msg: String) { main.post { Toast.makeText(this, msg, Toast.LENGTH_SHORT).show() } }
 
-    override fun onDestroy() {
+    /** Releases capture, windows and jobs. Each step is isolated so one failure cannot leak the rest. */
+    private fun teardown() {
         running = false
-        watchJob?.cancel(); translateJob?.cancel(); scope.cancel()
-        compare?.hide()
-        overlay?.destroy()
-        topBar?.destroy()
-        virtualDisplay?.release(); reader?.close(); projection?.stop()
-        lastBitmap?.recycle()
+        runCatching { watchJob?.cancel() }; runCatching { translateJob?.cancel() }
+        runCatching { compare?.hide() }; compare = null
+        runCatching { overlay?.destroy() }; overlay = null
+        runCatching { topBar?.destroy() }; topBar = null
+        runCatching { virtualDisplay?.release() }; virtualDisplay = null
+        runCatching { reader?.close() }; reader = null
+        runCatching { projection?.stop() }; projection = null
+        runCatching { lastBitmap?.recycle() }; lastBitmap = null
+        currentBlocks = emptyList(); lastTranslatedFp = null; lastTranslatedFpWithOverlay = null
+        tornDown = true
+    }
+
+    @Volatile private var tornDown = false
+
+    override fun onDestroy() {
+        teardown()
+        runCatching { scope.cancel() }
         prefs.lastStatus = "중지됨"
         super.onDestroy()
     }

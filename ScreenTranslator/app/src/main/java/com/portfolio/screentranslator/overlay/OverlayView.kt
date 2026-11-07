@@ -32,6 +32,9 @@ class OverlayView(context: Context) : View(context) {
     /** false = opaque panel behind the text, true = outline (halo) only. */
     var outlineStyle = false
 
+    /** false = paint over the original text in the sampled background colour; true = leave it. */
+    var eraseOriginal = true
+
     /** Diagnostic: red = OCR line boxes, blue = block box, green = translation box. */
     var debug = false
     private val debugPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = 3f }
@@ -61,6 +64,7 @@ class OverlayView(context: Context) : View(context) {
         val sorted = if (b.vertical) b.lines.sortedBy { it.left } else b.lines.sortedBy { it.top }
         // Both styles erase the ORIGINAL text with the sampled background colour (on a plain
         // bubble this is invisible). Only the box style also paints a panel behind the translation.
+        if (!eraseOriginal) { drawText(canvas, b, pad); return }
         if (b.vertical && sorted.isNotEmpty()) {
             // ML Kit returns vertical CJK text as irregular fragments; erase the whole source area.
             val all = Rect(b.srcBox); for (l in sorted) all.union(l)

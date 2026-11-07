@@ -24,6 +24,7 @@ class OverlayLayer(
     private val alpha: Float,
     private val fontScale: Float,
     private val outlineStyle: Boolean = false,
+    private val eraseOriginal: Boolean = true,
     private val debug: Boolean = false,
     private val onTouch: (() -> Unit)? = null,
 ) {
@@ -60,6 +61,7 @@ class OverlayLayer(
         val v = OverlayView(context).apply {
             fontScale = this@OverlayLayer.fontScale
             outlineStyle = this@OverlayLayer.outlineStyle
+            eraseOriginal = this@OverlayLayer.eraseOriginal
             debug = this@OverlayLayer.debug
             blocks = listOf(shifted)
             setOnTouchListener { _, ev ->

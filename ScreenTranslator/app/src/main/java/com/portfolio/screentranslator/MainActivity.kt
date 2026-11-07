@@ -38,7 +38,10 @@ class MainActivity : AppCompatActivity() {
         finish()   // get out of the way so the user is back on the app they want translated
     }
 
-    private val notifLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    private val notifLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (!granted) Toast.makeText(this, "알림 권한이 없으면 알림창의 [끄기] 버튼이 보이지 않습니다 (설정 > 앱 > 화면 번역 > 알림)", Toast.LENGTH_LONG).show()
+        launchCapture()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -107,19 +110,17 @@ class MainActivity : AppCompatActivity() {
                 startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
                 return@setOnClickListener
             }
-            if (Build.VERSION.SDK_INT >= 33 &&
-                ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-            ) notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             if (prefs.geminiKey.isBlank() && prefs.claudeKey.isBlank()) {
                 Toast.makeText(this, "Gemini 또는 Claude API 키를 먼저 입력하세요", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
-            val mpm = getSystemService(MediaProjectionManager::class.java)
-            // Android 14+: ask for the whole screen only (no "single app" picker in the dialog).
-            val captureIntent = if (Build.VERSION.SDK_INT >= 34)
-                mpm.createScreenCaptureIntent(android.media.projection.MediaProjectionConfig.createConfigForDefaultDisplay())
-            else mpm.createScreenCaptureIntent()
-            projectionLauncher.launch(captureIntent)
+            // Ask for the notification permission FIRST and wait for the answer; launching the
+            // capture consent at the same time hid the permission dialog, and without it the
+            // "running / 끄기" notification is never shown on Android 13+.
+            if (Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            else launchCapture()
         }
         findViewById<MaterialButton>(R.id.btn_stop).setOnClickListener {
             startService(Intent(this, CaptureService::class.java).setAction(CaptureService.ACTION_STOP))
@@ -140,6 +141,15 @@ class MainActivity : AppCompatActivity() {
             finish()
         }
         updateUsage()
+    }
+
+    private fun launchCapture() {
+        val mpm = getSystemService(MediaProjectionManager::class.java)
+        // Android 14+: ask for the whole screen only (no "single app" picker in the dialog).
+        val captureIntent = if (Build.VERSION.SDK_INT >= 34)
+            mpm.createScreenCaptureIntent(android.media.projection.MediaProjectionConfig.createConfigForDefaultDisplay())
+        else mpm.createScreenCaptureIntent()
+        projectionLauncher.launch(captureIntent)
     }
 
     override fun onResume() { super.onResume(); updateUsage() }
