@@ -53,14 +53,6 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("auto_mode2", false)
         set(v) = sp.edit().putBoolean("auto_mode2", v).apply()
 
-    /**
-     * 0.3 .. 1.0. Boxes are separate small windows, so above 0.8 only touches landing
-     * on a translated box are blocked by Android 12+; the rest of the screen stays touchable.
-     */
-    var opacity: Float
-        get() = sp.getFloat("opacity2", 1.0f)
-        set(v) = sp.edit().putFloat("opacity2", v.coerceIn(0.3f, 1.0f)).apply()
-
     /** Last status / error text, shown in the notification and on the main screen. */
     var lastStatus: String
         get() = sp.getString("last_status", "") ?: ""

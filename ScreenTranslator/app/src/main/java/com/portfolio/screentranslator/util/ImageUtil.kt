@@ -72,14 +72,30 @@ object ImageUtil {
         outer.top = outer.top.coerceIn(0, bmp.height - 1); outer.bottom = outer.bottom.coerceIn(1, bmp.height)
 
         val bgHist = HashMap<Int, Int>()
-        fun addAll(px: IntArray, n: Int) { var i = 0; while (i < n) { val q = quantize(px[i]); bgHist[q] = (bgHist[q] ?: 0) + 1; i += 2 } }
+        val sumR = HashMap<Int, Long>(); val sumG = HashMap<Int, Long>(); val sumB = HashMap<Int, Long>()
+        fun addAll(px: IntArray, n: Int) {
+            var i = 0
+            while (i < n) {
+                val p = px[i]; val q = quantize(p)
+                bgHist[q] = (bgHist[q] ?: 0) + 1
+                sumR[q] = (sumR[q] ?: 0L) + (p shr 16 and 0xFF)
+                sumG[q] = (sumG[q] ?: 0L) + (p shr 8 and 0xFF)
+                sumB[q] = (sumB[q] ?: 0L) + (p and 0xFF)
+                i += 2
+            }
+        }
         val w = outer.width(); val h = outer.height()
         val row = IntArray(w); val col = IntArray(h)
         bmp.getPixels(row, 0, w, outer.left, outer.top, w, 1); addAll(row, w)
         bmp.getPixels(row, 0, w, outer.left, outer.bottom - 1, w, 1); addAll(row, w)
         bmp.getPixels(col, 0, 1, outer.left, outer.top, 1, h); addAll(col, h)
         bmp.getPixels(col, 0, 1, outer.right - 1, outer.top, 1, h); addAll(col, h)
-        val bg = bgHist.maxByOrNull { it.value }?.key ?: 0xFFFFFFFF.toInt()
+        // Most common colour bin, then the exact average inside it (so white stays #FFFFFF).
+        val bin = bgHist.maxByOrNull { it.value }
+        val bg = if (bin == null) 0xFFFFFFFF.toInt() else {
+            val n = bin.value.toLong().coerceAtLeast(1)
+            (0xFF shl 24) or ((sumR[bin.key]!! / n).toInt() shl 16) or ((sumG[bin.key]!! / n).toInt() shl 8) or (sumB[bin.key]!! / n).toInt()
+        }
         val bgLum = luminance(bg)
 
         var fg = if (bgLum > 128) 0xFF000000.toInt() else 0xFFFFFFFF.toInt()

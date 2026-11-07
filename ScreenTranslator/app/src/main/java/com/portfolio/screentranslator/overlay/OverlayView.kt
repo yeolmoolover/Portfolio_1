@@ -47,9 +47,10 @@ class OverlayView(context: Context) : View(context) {
     private fun drawBlock(canvas: Canvas, b: TranslatedBlock) {
         boxPaint.color = b.bgColor
         boxPaint.style = Paint.Style.FILL
-        val padX = 3 * density
-        // Vertical padding closes the gap between consecutive lines so the box reads as one.
-        val padY = max(2 * density, b.lineHeight * 0.25f)
+        val padX = 4 * density
+        // Vertical padding closes the gap between consecutive lines so the box reads as one,
+        // and covers the anti-aliased edges of the original glyphs.
+        val padY = max(3 * density, b.lineHeight * 0.3f)
         for (line in b.lines) {
             val r = RectF(line).apply { inset(-padX, -padY) }
             canvas.drawRoundRect(r, 3 * density, 3 * density, boxPaint)

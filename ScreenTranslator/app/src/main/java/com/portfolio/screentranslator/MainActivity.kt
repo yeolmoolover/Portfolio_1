@@ -72,7 +72,6 @@ class MainActivity : AppCompatActivity() {
         }
         val comic = findViewById<SwitchMaterial>(R.id.comic_mode).apply { isChecked = prefs.comicMode }
         val auto = findViewById<SwitchMaterial>(R.id.auto_mode).apply { isChecked = prefs.autoMode }
-        val opacity = findViewById<Slider>(R.id.opacity).apply { value = prefs.opacity }
         val fontScale = findViewById<Slider>(R.id.font_scale).apply { value = prefs.fontScale }
 
         fun save() {
@@ -85,7 +84,6 @@ class MainActivity : AppCompatActivity() {
             prefs.sourceLang = langValues[langLabels.indexOf(lang.text.toString()).coerceAtLeast(0)]
             prefs.comicMode = comic.isChecked
             prefs.autoMode = auto.isChecked
-            prefs.opacity = opacity.value
             prefs.fontScale = fontScale.value
         }
 

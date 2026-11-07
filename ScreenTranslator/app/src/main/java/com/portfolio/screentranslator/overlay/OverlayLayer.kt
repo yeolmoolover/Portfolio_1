@@ -38,7 +38,7 @@ class OverlayLayer(
 
     private fun addBlock(b: TranslatedBlock) {
         // Window = block box plus the largest padding the view may paint around a line.
-        val pad = (maxOf(4 * density, b.lineHeight * 0.3f)).toInt() + 1
+        val pad = (maxOf(5 * density, b.lineHeight * 0.35f)).toInt() + 1
         val r = Rect(b.box).apply { inset(-pad, -pad) }
         if (r.width() <= 0 || r.height() <= 0) return
         fun shift(x: Rect) = Rect(x.left - r.left, x.top - r.top, x.right - r.left, x.bottom - r.top)
