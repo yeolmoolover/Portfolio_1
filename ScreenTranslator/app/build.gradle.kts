@@ -50,6 +50,9 @@ dependencies {
     implementation("com.google.mlkit:text-recognition:16.0.1")
     implementation("com.google.mlkit:text-recognition-japanese:16.0.1")
     implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
+    // Korean recogniser is used only to find text that is ALREADY Korean and skip it:
+    // the ja/zh recognisers read Hangul as look-alike hanzi/kana and would "translate" it.
+    implementation("com.google.mlkit:text-recognition-korean:16.0.1")
     implementation("com.google.mlkit:translate:17.0.3")
 
     // Gemini / Gemma REST

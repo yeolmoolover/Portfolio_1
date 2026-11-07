@@ -56,6 +56,6 @@
         <!-- ML Kit: download OCR models at install time so first use is fast -->
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"
-            android:value="ocr,ocr_japanese,ocr_chinese" />
+            android:value="ocr,ocr_japanese,ocr_chinese,ocr_korean" />
     </application>
 </manifest>

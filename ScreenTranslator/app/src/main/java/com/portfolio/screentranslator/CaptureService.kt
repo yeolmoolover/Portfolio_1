@@ -252,7 +252,8 @@ class CaptureService : Service() {
         busy = true
         try {
             val ocrResult = ocr.recognise(bmp, prefs.sourceLang)
-            val blocks = ocrResult.blocks
+            val topInset = statusBarHeight()
+            val blocks = ocrResult.blocks.filter { it.box.bottom > topInset + 4 }
             lastSource = blocks
             lastBitmap?.recycle(); lastBitmap = bmp
             val comic = prefs.comicMode
@@ -301,6 +302,12 @@ class CaptureService : Service() {
         lastFrameFp = fp
         stableSince = System.currentTimeMillis()
     }
+
+    private fun statusBarHeight(): Int = try {
+        if (Build.VERSION.SDK_INT >= 30)
+            wm.currentWindowMetrics.windowInsets.getInsets(android.view.WindowInsets.Type.statusBars()).top
+        else 0
+    } catch (e: Exception) { 0 }
 
     private fun buildRequest(bmp: Bitmap, blocks: List<SourceBlock>, comic: Boolean): TranslationRequest {
         var jpeg: ByteArray? = null; var iw = 0; var ih = 0

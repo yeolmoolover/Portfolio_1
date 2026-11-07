@@ -8,6 +8,7 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
 import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
+import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.portfolio.screentranslator.translate.SourceBlock
 import kotlinx.coroutines.async
@@ -19,30 +20,38 @@ import kotlinx.coroutines.tasks.await
  * parallel (both also read Latin) and the one that found more CJK characters wins.
  *
  * Blocks that are already Korean are dropped: the target language is Korean, and the
- * CJK recognisers otherwise read Hangul as random hanzi/kana and produce garbage.
+ * ja/zh recognisers cannot read Hangul - they output look-alike hanzi/kana instead, so
+ * the source text itself never contains Hangul. A Korean recogniser therefore runs in
+ * parallel, and any source block overlapping a Hangul block it found is discarded.
  */
 class OcrEngine {
     private val latin: TextRecognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     private val japanese: TextRecognizer by lazy { TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build()) }
     private val chinese: TextRecognizer by lazy { TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build()) }
+    private val korean: TextRecognizer by lazy { TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build()) }
 
     /** Result of a pass: blocks to translate plus how much Korean was on screen. */
     data class Result(val blocks: List<SourceBlock>, val koreanBlocks: Int)
 
-    suspend fun recognise(bitmap: Bitmap, sourceLang: String): Result {
+    suspend fun recognise(bitmap: Bitmap, sourceLang: String): Result = coroutineScope {
         val image = InputImage.fromBitmap(bitmap, 0)
+        val ko = async { korean.process(image).await() }
         val text: Text = when (sourceLang) {
             "ja" -> japanese.process(image).await()
             "zh" -> chinese.process(image).await()
             "en" -> latin.process(image).await()
-            else -> coroutineScope {
+            else -> {
                 val ja = async { japanese.process(image).await() }
                 val zh = async { chinese.process(image).await() }
                 val a = ja.await(); val b = zh.await()
                 if (score(a) >= score(b)) a else b
             }
         }
-        return toBlocks(text, bitmap.width, bitmap.height)
+        // Regions the Korean model reads as real Hangul (line level, so mixed blocks work too).
+        val koreanRects = ko.await().textBlocks.flatMap { it.lines }
+            .filter { isMostlyHangul(it.text) }
+            .mapNotNull { it.boundingBox }
+        toBlocks(text, bitmap.width, bitmap.height, koreanRects)
     }
 
     private fun score(t: Text): Int {
@@ -57,7 +66,7 @@ class OcrEngine {
         return total + kana * 3 + han
     }
 
-    private fun toBlocks(text: Text, w: Int, h: Int): Result {
+    private fun toBlocks(text: Text, w: Int, h: Int, koreanRects: List<Rect>): Result {
         val out = ArrayList<SourceBlock>()
         var korean = 0
         var id = 1
@@ -69,15 +78,28 @@ class OcrEngine {
             val r = clamp(Rect(box), w, h)
             if (r.width() < 4 || r.height() < 4) continue
 
-            val lineRects = block.lines.mapNotNull { it.boundingBox?.let { b -> clamp(Rect(b), w, h) } }
+            // Drop the Korean lines from this block; if most of it was Korean, drop the block.
+            val allLines = block.lines.mapNotNull { it.boundingBox?.let { b -> clamp(Rect(b), w, h) } }
                 .filter { it.width() >= 2 && it.height() >= 2 }
-                .ifEmpty { listOf(r) }
+            val foreignLines = allLines.filter { line -> koreanRects.none { k -> overlap(line, k) > 0.4f } }
+            if (allLines.isNotEmpty() && foreignLines.size * 2 <= allLines.size) { korean++; continue }
+            // Mostly foreign block with a few Korean lines: keep it, paint only the foreign lines.
+            val lineRects = foreignLines.ifEmpty { listOf(r) }
             val lineHeight = lineRects.map { it.height() }.sorted().let { it[it.size / 2] }
             val vertical = block.lines.size >= 2 && r.height() > r.width() * 1.8 &&
                 lineRects.all { it.width() <= it.height() * 1.5 }
             out += SourceBlock(id++, s, r, vertical, lineRects, lineHeight)
         }
         return Result(out, korean)
+    }
+
+    /** Intersection area / smaller area. */
+    private fun overlap(a: Rect, b: Rect): Float {
+        val i = Rect()
+        if (!i.setIntersect(a, b)) return 0f
+        val inter = i.width().toFloat() * i.height()
+        val small = minOf(a.width().toFloat() * a.height(), b.width().toFloat() * b.height()).coerceAtLeast(1f)
+        return inter / small
     }
 
     private fun clamp(r: Rect, w: Int, h: Int): Rect {
