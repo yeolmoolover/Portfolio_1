@@ -75,6 +75,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("bar_reversed", false)
         set(v) = sp.edit().putBoolean("bar_reversed", v).apply()
 
+    /** Do not translate onomatopoeia / sound effects (and never add model-found SFX). */
+    var skipSfx: Boolean
+        get() = sp.getBoolean("skip_sfx", true)
+        set(v) = sp.edit().putBoolean("skip_sfx", v).apply()
+
     var fontScale: Float
         get() = sp.getFloat("font_scale", 1.0f)
         set(v) = sp.edit().putFloat("font_scale", v.coerceIn(0.6f, 1.6f)).apply()

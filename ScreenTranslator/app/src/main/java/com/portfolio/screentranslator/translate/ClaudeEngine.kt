@@ -41,7 +41,7 @@ class ClaudeEngine(
         return fresh
     }
 
-    override suspend fun translate(req: TranslationRequest): TranslationResult = withContext(Dispatchers.IO) {
+    override suspend fun translate(req: TranslationRequest, onPartial: ((TranslatedText) -> Unit)?): TranslationResult = withContext(Dispatchers.IO) {
         val key = apiKeyProvider()
         if (key.isBlank()) throw EngineUnavailableException("Claude API 키가 없습니다")
 
@@ -66,8 +66,22 @@ class ClaudeEngine(
             .addUserMessageOfContentBlockParams(content)
             .build()
 
-        val message = try {
-            client(key).messages().create(params)
+        // Stream so bubbles can be drawn as they complete.
+        val parser = onPartial?.let { PromptBuilder.IncrementalParser(it) }
+        val sb = StringBuilder()
+        var refusal = false
+        try {
+            val stream = client(key).messages().createStreaming(params)
+            try {
+                stream.stream().forEach { ev ->
+                    ev.contentBlockDelta().ifPresent { d ->
+                        d.delta().text().ifPresent { t -> sb.append(t.text()); parser?.feed(t.text()) }
+                    }
+                    ev.messageDelta().ifPresent { d ->
+                        if (d.delta().stopReason().orElse(null) == StopReason.REFUSAL) refusal = true
+                    }
+                }
+            } finally { stream.close() }
         } catch (e: RateLimitException) {
             throw QuotaExceededException("Claude 요청 한도 초과 (429)")
         } catch (e: AnthropicServiceException) {
@@ -78,13 +92,7 @@ class ClaudeEngine(
             throw EngineUnavailableException("Claude 응답 해석 실패: ${e.message}")
         }
 
-        if (message.stopReason().orElse(null) == StopReason.REFUSAL) {
-            throw EngineUnavailableException("Claude가 이 화면의 번역을 거부했습니다")
-        }
-        val text = message.content().stream()
-            .flatMap { it.text().stream() }
-            .map { it.text() }
-            .reduce("") { a, b -> a + b }
-        TranslationResult(PromptBuilder.parse(text), name)
+        if (refusal) throw EngineUnavailableException("Claude가 이 화면의 번역을 거부했습니다")
+        TranslationResult(PromptBuilder.parse(sb.toString()), name)
     }
 }

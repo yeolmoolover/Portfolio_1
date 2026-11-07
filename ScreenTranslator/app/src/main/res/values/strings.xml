@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">화면 번역</string>
     <string name="notif_channel">화면 번역 실행 중</string>
-    <string name="notif_title">화면 번역이 켜져 있습니다</string>
+    <string name="notif_title">화면 번역 실행 중 — 끄려면 아래 [번역 중지]</string>
     <string name="notif_text">상단 바 또는 아래 버튼으로 번역</string>
     <string name="start">번역 시작</string>
     <string name="stop">번역 중지</string>
@@ -19,6 +19,7 @@
     <string name="auto_mode">자동 모드 (끄면: [번역] 버튼 → 번역, 화면 터치 → 지움)</string>
     <string name="font_scale">글자 크기 배율</string>
     <string name="text_style">번역문 표시 방식</string>
+    <string name="skip_sfx">효과음(의성어·의태어)은 번역하지 않음</string>
     <string name="bar_reversed">상단 바 버튼 순서 뒤집기 (✕ | 원문 보기 | 번역)</string>
     <string name="debug_boxes">디버그: 인식 영역 표시 (빨강=인식 줄, 파랑=블록, 초록=번역 위치)</string>
     <string name="usage_today">오늘 사용: Gemini %1$d회 · Gemma %2$d회 · Claude %3$d회</string>

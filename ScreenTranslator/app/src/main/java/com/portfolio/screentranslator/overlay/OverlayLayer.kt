@@ -31,13 +31,21 @@ class OverlayLayer(
     private val views = ArrayList<OverlayView>()
     private val density = context.resources.displayMetrics.density
 
-    /** Must be called on the main thread. */
-    var blocks: List<TranslatedBlock> = emptyList()
+    private val current = ArrayList<TranslatedBlock>()
+
+    /** Must be called on the main thread. Replaces everything. */
+    var blocks: List<TranslatedBlock>
+        get() = current
         set(value) {
-            field = value
+            current.clear(); current += value
             clearViews()
             for (b in value) addBlock(b)
         }
+
+    /** Must be called on the main thread. Adds windows without touching the existing ones. */
+    fun append(more: List<TranslatedBlock>) {
+        for (b in more) { current += b; addBlock(b) }
+    }
 
     private fun addBlock(b: TranslatedBlock) {
         // Window = block box plus the largest padding the view may paint around a line.

@@ -78,6 +78,7 @@ class MainActivity : AppCompatActivity() {
         }
         val comic = findViewById<SwitchMaterial>(R.id.comic_mode).apply { isChecked = prefs.comicMode }
         val debug = findViewById<SwitchMaterial>(R.id.debug_boxes).apply { isChecked = prefs.debugBoxes }
+        val skipSfx = findViewById<SwitchMaterial>(R.id.skip_sfx).apply { isChecked = prefs.skipSfx }
         val barReversed = findViewById<SwitchMaterial>(R.id.bar_reversed).apply { isChecked = prefs.barReversed }
         val auto = findViewById<SwitchMaterial>(R.id.auto_mode).apply { isChecked = prefs.autoMode }
         val fontScale = findViewById<Slider>(R.id.font_scale).apply { value = prefs.fontScale }
@@ -92,6 +93,7 @@ class MainActivity : AppCompatActivity() {
             prefs.sourceLang = langValues[langLabels.indexOf(lang.text.toString()).coerceAtLeast(0)]
             prefs.comicMode = comic.isChecked
             prefs.debugBoxes = debug.isChecked
+            prefs.skipSfx = skipSfx.isChecked
             prefs.barReversed = barReversed.isChecked
             prefs.textStyle = styleValues[styleLabels.indexOf(style.text.toString()).coerceAtLeast(0)]
             prefs.autoMode = auto.isChecked

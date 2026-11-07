@@ -109,6 +109,12 @@
             android:text="@string/comic_mode" />
 
         <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/skip_sfx"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/skip_sfx" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
             android:id="@+id/auto_mode"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

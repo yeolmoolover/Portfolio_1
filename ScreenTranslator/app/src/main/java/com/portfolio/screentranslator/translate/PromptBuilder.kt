@@ -34,6 +34,9 @@ Respond with JSON only, matching this shape exactly:
                     .append(ko.take(160).replace('\n', ' ')).append('\n')
             }
         }
+        if (req.skipSfx) {
+            sb.append("\nDo NOT translate onomatopoeia / sound effects: if a block is only a sound effect (e.g. ドキドキ, 轰, BOOM), return an empty \"ko\" for it. Do not add any \"sfx\" entries.\n")
+        }
         sb.append("\nBlocks to translate:\n")
         for (b in req.blocks) {
             sb.append("[id=").append(b.id).append("] ")
@@ -43,6 +46,32 @@ Respond with JSON only, matching this shape exactly:
         if (req.blocks.isEmpty()) sb.append("(none recognised - only look for SFX in the image)\n")
         if (req.imageJpeg != null) sb.append("\nA screenshot of the screen is attached.")
         return sb.toString()
+    }
+
+    /**
+     * Feeds streamed text and emits each {"id":N,"ko":"..."} object as soon as it is complete.
+     * Only complete objects are matched, so a partial object at the end waits for more text.
+     */
+    class IncrementalParser(private val onItem: (TranslatedText) -> Unit) {
+        private val buf = StringBuilder()
+        private var scanFrom = 0
+        private val seen = HashSet<Int>()
+        private val re = Regex("""\{\s*"id"\s*:\s*(\d+)\s*,\s*"ko"\s*:\s*"((?:[^"\\]|\\.)*)"\s*\}""")
+
+        fun feed(chunk: String) {
+            buf.append(chunk)
+            var m = re.find(buf, scanFrom)
+            while (m != null) {
+                val id = m.groupValues[1].toInt()
+                if (seen.add(id)) {
+                    val raw = m.groupValues[2]
+                    val ko = runCatching { JSONObject("{\"k\":\"$raw\"}").getString("k") }.getOrDefault(raw).trim()
+                    if (ko.isNotEmpty()) onItem(TranslatedText(id, ko, null, isSfx = false))
+                }
+                scanFrom = m.range.last + 1
+                m = re.find(buf, scanFrom)
+            }
+        }
     }
 
     /** Tolerant parser: finds the first {...} in the text and reads blocks + sfx. */

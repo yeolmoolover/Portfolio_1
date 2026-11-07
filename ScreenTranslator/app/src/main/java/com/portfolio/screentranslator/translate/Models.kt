@@ -46,6 +46,8 @@ data class TranslationRequest(
     val sourceLangHint: String,  // auto | ja | zh | en
     /** Previous screens (source -> korean) for consistency of names / tone. */
     val history: List<Pair<String, String>>,
+    /** Leave onomatopoeia / sound effects untranslated. */
+    val skipSfx: Boolean = true,
 )
 
 data class TranslatedText(val sourceId: Int?, val text: String, val boxNorm: FloatArray?, val isSfx: Boolean)
@@ -62,5 +64,10 @@ interface TranslationEngine {
     val name: String
     /** True when this engine can read the screenshot (needed for SFX detection). */
     val supportsImage: Boolean
-    suspend fun translate(req: TranslationRequest): TranslationResult
+    /**
+     * Translates all blocks. When [onPartial] is given the engine streams and calls it (from a
+     * background thread) for every block as soon as its translation is complete, so the caller
+     * can draw bubbles one by one before the whole reply has arrived.
+     */
+    suspend fun translate(req: TranslationRequest, onPartial: ((TranslatedText) -> Unit)? = null): TranslationResult
 }

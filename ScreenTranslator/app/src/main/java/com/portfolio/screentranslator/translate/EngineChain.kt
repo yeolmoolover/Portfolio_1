@@ -51,7 +51,7 @@ class EngineChain(private val prefs: Prefs) {
     fun historySnapshot(): List<Pair<String, String>> = synchronized(history) { history.toList() }
 
     /** Runs the chain. Throws only when every engine failed. */
-    suspend fun translate(req: TranslationRequest, cacheKey: String): TranslationResult {
+    suspend fun translate(req: TranslationRequest, cacheKey: String, onPartial: ((TranslatedText) -> Unit)? = null): TranslationResult {
         cached(cacheKey)?.let { return it }
         val errors = ArrayList<String>()
         for (engine in order()) {
@@ -60,7 +60,7 @@ class EngineChain(private val prefs: Prefs) {
             if (engine === claude && prefs.claudeKey.isBlank()) continue
             val r = if (engine.supportsImage) req else req.copy(imageJpeg = null)
             try {
-                val result = engine.translate(r)
+                val result = engine.translate(r, onPartial)
                 prefs.bumpUsage(engine.name)
                 remember(req, result)
                 synchronized(cache) { cache[cacheKey] = result }

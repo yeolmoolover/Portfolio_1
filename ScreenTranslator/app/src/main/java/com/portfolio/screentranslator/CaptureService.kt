@@ -29,6 +29,7 @@ import com.portfolio.screentranslator.overlay.TopBar
 import com.portfolio.screentranslator.translate.EngineChain
 import com.portfolio.screentranslator.translate.SourceBlock
 import com.portfolio.screentranslator.translate.TranslatedBlock
+import com.portfolio.screentranslator.translate.TranslatedText
 import com.portfolio.screentranslator.translate.TranslationRequest
 import com.portfolio.screentranslator.translate.TranslationResult
 import com.portfolio.screentranslator.util.ImageUtil
@@ -118,12 +119,7 @@ class CaptureService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_STOP -> {
-                stopSelf()
-                // If something is wedged, make sure the bar and capture still go away.
-                main.postDelayed({ if (running) { runCatching { onDestroy() }; android.os.Process.killProcess(android.os.Process.myPid()) } }, 1500)
-                return START_NOT_STICKY
-            }
+            ACTION_STOP -> { hardStop(); return START_NOT_STICKY }
             ACTION_START -> {
                 startForeground(NOTIF_ID, buildNotification(getString(R.string.notif_text)))
                 val code = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
@@ -216,7 +212,7 @@ class CaptureService : Service() {
             this, wm, statusBarHeight(), prefs.barReversed,
             onTranslate = { translateNow() },
             onToggleOriginal = { toggleOriginal() },
-            onStop = { stopSelf() },
+            onStop = { hardStop() },
             onOutsideTouch = { onUserTouchedScreen() },
         )
         running = true
@@ -299,6 +295,7 @@ class CaptureService : Service() {
     private suspend fun translateBitmap(bmp: Bitmap, fp: IntArray) {
         busy = true
         topBar?.setBusy(true)
+        withContext(Dispatchers.Main) { overlay?.blocks = emptyList() }
         try {
             val t0 = System.currentTimeMillis()
             val ocrInput = ImageUtil.boostForOcr(bmp)
@@ -323,10 +320,22 @@ class CaptureService : Service() {
             val req = buildRequest(bmp, blocks, comic)
             val key = chain.cacheKey(req, comic)
             val cachedHit = chain.cached(key) != null
+            val placer = Placer(bmp, blocks, topBar?.bounds()?.bottom ?: topInset)
+            var streamed = 0
+            // Streamed items are placed and drawn immediately (one window each) so the first
+            // bubbles appear long before the reply is complete.
+            val onPartial: (TranslatedText) -> Unit = { t ->
+                val d = placer.place(t)
+                if (d != null) {
+                    streamed++
+                    main.post { overlay?.append(listOf(d)) }
+                }
+            }
             val t1 = System.currentTimeMillis()
-            val result = chain.translate(req, key)
+            val result = chain.translate(req, key, if (cachedHit) null else onPartial)
             val tApi = System.currentTimeMillis() - t1
-            val drawn = toDrawable(bmp, blocks, result)
+            placer.placeAll(result.items)                 // anything the stream did not cover
+            val drawn = placer.placed.toList()
             currentBlocks = drawn
             lastTranslatedFp = fp
             overlayHiddenForMotion = false
@@ -338,11 +347,17 @@ class CaptureService : Service() {
                 val missing = blocks.size - drawn.count { !it.isSfx }
                 if (missing > 0) append(" (").append(missing).append("개 누락)")
                 append(" · 인식 ").append(tOcr).append("ms · 번역 ").append(tApi).append("ms")
+                if (streamed > 0) append(" · 스트리밍 ").append(streamed).append("개")
                 if (comic) append(" (만화 모드: 스크린샷 포함)")
                 chain.lastError?.let { append("\n대체됨: ").append(it) }
             }
             setStatus(status)
-            showOverlay(drawn)
+            if (streamed > 0) {
+                // windows already on screen: add whatever placeAll added, then just record the fingerprint
+                val extra = drawn.drop(streamed)
+                if (extra.isNotEmpty()) withContext(Dispatchers.Main) { overlay?.append(extra) }
+                settleOverlay()
+            } else showOverlay(drawn)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -361,6 +376,11 @@ class CaptureService : Service() {
      */
     private suspend fun showOverlay(blocks: List<TranslatedBlock>) {
         withContext(Dispatchers.Main) { overlay?.blocks = blocks }
+        settleOverlay()
+    }
+
+    /** Waits for the compositor, then records the fingerprint of the screen with the overlay. */
+    private suspend fun settleOverlay() {
         delay(150)
         val after = grabFrame() ?: return
         val fp = ImageUtil.fingerprint(after)
@@ -421,33 +441,88 @@ class CaptureService : Service() {
         return TranslationRequest(
             blocks = blocks, imageJpeg = jpeg, imageWidth = iw, imageHeight = ih,
             screenWidth = bmp.width, screenHeight = bmp.height,
-            sourceLangHint = prefs.sourceLang, history = chain.historySnapshot(),
+            sourceLangHint = prefs.sourceLang, history = chain.historySnapshot(), skipSfx = prefs.skipSfx,
         )
     }
 
-    private fun toDrawable(bmp: Bitmap, blocks: List<SourceBlock>, result: TranslationResult): List<TranslatedBlock> {
-        val byId = blocks.associateBy { it.id }
-        val out = ArrayList<TranslatedBlock>()
-        val gap = (6 * resources.displayMetrics.density).toInt()
+    /**
+     * Turns translated items into positioned, coloured blocks. Thread-safe so streamed items
+     * can be placed as they arrive; already-placed ids are ignored. Guarantees that no two
+     * placed boxes intersect and that nothing is drawn over the top bar.
+     */
+    private inner class Placer(val bmp: Bitmap, val blocks: List<SourceBlock>, barBottom: Int) {
+        val placed = ArrayList<TranslatedBlock>()
+        private val byId = blocks.associateBy { it.id }
+        private val gap = (6 * resources.displayMetrics.density).toInt()
+        private val minTop = barBottom + gap
+
+        @Synchronized fun placeAll(items: List<TranslatedText>): List<TranslatedBlock> = items.mapNotNull { place(it) }
+
+        @Synchronized fun place(t: TranslatedText): TranslatedBlock? {
+            if (t.isSfx) {
+                if (prefs.skipSfx) return null
+                val f = t.boxNorm ?: return null
+                val r = Rect((f[0] * bmp.width).toInt(), (f[1] * bmp.height).toInt(),
+                    ((f[0] + f[2]) * bmp.width).toInt(), ((f[1] + f[3]) * bmp.height).toInt())
+                if (blocks.any { Rect.intersects(it.box, r) && overlapRatio(it.box, r) > 0.5f }) return null
+                val b = TranslatedBlock(null, t.text, r, true, 0, 0xFFFFFFFF.toInt())
+                return finish(b)
+            }
+            val src = byId[t.sourceId] ?: return null
+            if (placed.any { it.sourceId == src.id }) return null
+            val (bg, fg) = ImageUtil.sampleColors(bmp, src.box)
+            val b = if (src.vertical)
+                TranslatedBlock(src.id, t.text, horizontalBox(src), false, bg, fg, src.lines.map { Rect(it) }, src.lineHeight, vertical = true, srcBox = Rect(src.box))
+            else
+                TranslatedBlock(src.id, t.text, Rect(src.box), false, bg, fg, src.lines.map { Rect(it) }, src.lineHeight)
+            return finish(b)
+        }
+
+        /** Keep below the bar and shrink away from any box already placed; then record it. */
+        private fun finish(b: TranslatedBlock): TranslatedBlock? {
+            val box = Rect(b.box)
+            if (box.top < minTop) box.top = minTop
+            for (o in placed) {
+                val i = Rect()
+                if (!i.setIntersect(box, o.box)) continue
+                if (i.width() < i.height()) {       // side by side: trim horizontally
+                    if (box.centerX() < o.box.centerX()) box.right = o.box.left - gap else box.left = o.box.right + gap
+                } else {                             // stacked: trim vertically
+                    if (box.centerY() < o.box.centerY()) box.bottom = o.box.top - gap else box.top = o.box.bottom + gap
+                }
+            }
+            val minW = if (b.vertical) b.lineHeight * 3 else 8
+            if (box.width() < minW || box.height() < maxOf(8, b.lineHeight / 2)) return null
+            val out = b.copy(box = box)
+            placed += out
+            return out
+        }
+
         /**
          * Horizontal panel for a vertical block: as wide as the column height (what a bubble
          * usually allows), at least ~4.5 glyphs wide, placed inside the free span between the
-         * neighbouring blocks at the same height - shifted sideways rather than squeezed.
+         * neighbouring blocks at the same height - shifted sideways rather than squeezed - and
+         * clipped against blocks directly above / below.
          */
-        fun horizontalBox(src: SourceBlock): Rect {
+        private fun horizontalBox(src: SourceBlock): Rect {
             val cx = src.box.centerX(); val cy = src.box.centerY()
-            val halfH = (src.box.height() * 0.65f).toInt()          // a bit taller than the columns
-            val top = (cy - halfH).coerceAtLeast(0); val bottom = (cy + halfH).coerceAtMost(bmp.height)
+            val halfH = (src.box.height() * 0.65f).toInt()
+            var top = (cy - halfH).coerceAtLeast(minTop); var bottom = (cy + halfH).coerceAtMost(bmp.height)
             val minW = maxOf(src.box.width(), (src.lineHeight * 4.5f).toInt())
             val want = maxOf(minW, (src.box.height() * 1.1f).toInt()).coerceAtMost((bmp.width * 0.8f).toInt())
-            // free horizontal span at this height
             var spanL = 0; var spanR = bmp.width
-            val others = blocks.filter { it.id != src.id }.map { it.box } + out.map { it.box }
+            val others = blocks.filter { it.id != src.id }.map { it.box } + placed.map { it.box }
             for (o in others) {
                 if (o.bottom <= top || o.top >= bottom) continue
-                if (o.right <= cx && o.right + gap > spanL) spanL = o.right + gap
-                if (o.left >= cx && o.left - gap < spanR) spanR = o.left - gap
+                when {
+                    o.right <= cx -> if (o.right + gap > spanL) spanL = o.right + gap
+                    o.left >= cx -> if (o.left - gap < spanR) spanR = o.left - gap
+                    // overlaps our centre column: it is above or below us - clip vertically
+                    o.centerY() < cy -> if (o.bottom + gap > top) top = o.bottom + gap
+                    else -> if (o.top - gap < bottom) bottom = o.top - gap
+                }
             }
+            if (bottom <= top) { top = src.box.top; bottom = src.box.bottom }
             val w = want.coerceAtMost(spanR - spanL).coerceAtLeast(minOf(minW, spanR - spanL))
             var left = cx - w / 2
             if (left < spanL) left = spanL
@@ -455,28 +530,6 @@ class CaptureService : Service() {
             left = left.coerceAtLeast(0)
             return Rect(left, top, left + w, bottom)
         }
-        for (t in result.items) {
-            if (t.isSfx) {
-                val f = t.boxNorm ?: continue
-                val r = Rect(
-                    (f[0] * bmp.width).toInt(), (f[1] * bmp.height).toInt(),
-                    ((f[0] + f[2]) * bmp.width).toInt(), ((f[1] + f[3]) * bmp.height).toInt(),
-                )
-                // avoid drawing SFX on top of a speech bubble we already translated
-                if (blocks.any { Rect.intersects(it.box, r) && overlapRatio(it.box, r) > 0.5f }) continue
-                out += TranslatedBlock(null, t.text, r, true, 0, 0xFFFFFFFF.toInt())
-            } else {
-                val src = byId[t.sourceId] ?: continue
-                val (bg, fg) = ImageUtil.sampleColors(bmp, src.box)
-                if (src.vertical) {
-                    // Write the translation horizontally, centred on the original columns.
-                    out += TranslatedBlock(src.id, t.text, horizontalBox(src), false, bg, fg, src.lines.map { Rect(it) }, src.lineHeight, vertical = true, srcBox = Rect(src.box))
-                } else {
-                    out += TranslatedBlock(src.id, t.text, Rect(src.box), false, bg, fg, src.lines.map { Rect(it) }, src.lineHeight)
-                }
-            }
-        }
-        return out
     }
 
     private fun overlapRatio(a: Rect, b: Rect): Float {
@@ -551,6 +604,18 @@ class CaptureService : Service() {
     }
 
     // ---------------------------------------------------------------- teardown
+
+    /**
+     * Stop, and if the normal teardown has not finished within ~1 s (e.g. the main thread is
+     * stuck), kill the process from a plain thread so the bar and the capture always go away.
+     */
+    private fun hardStop() {
+        runCatching { stopSelf() }
+        Thread {
+            try { Thread.sleep(1200) } catch (_: InterruptedException) {}
+            if (running) android.os.Process.killProcess(android.os.Process.myPid())
+        }.start()
+    }
 
     private fun toast(msg: String) { main.post { Toast.makeText(this, msg, Toast.LENGTH_SHORT).show() } }
 
