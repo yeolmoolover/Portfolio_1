@@ -40,6 +40,51 @@
             android:layout_height="wrap_content"
             android:text="@string/stop" />
 
+        <TextView
+            android:id="@+id/last_status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="12sp"
+            android:textIsSelectable="true"
+            android:textColor="#444444" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_translate_now"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="지금 화면 번역 (앱을 닫고 바로 실행)" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_original"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/toggle_original" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_compare"
+            style="@style/Widget.Material3.Button.TonalButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/compare_now" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/volume_trigger"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/volume_trigger" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_accessibility"
+            style="@style/Widget.Material3.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/open_accessibility" />
+
         <TextView style="@style/SectionHeader" android:text="@string/section_engine" />
 
         <com.google.android.material.textfield.TextInputLayout

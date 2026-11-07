@@ -2,7 +2,7 @@
     <string name="app_name">화면 번역</string>
     <string name="notif_channel">화면 번역 실행 중</string>
     <string name="notif_title">화면 번역이 켜져 있습니다</string>
-    <string name="notif_text">플로팅 버튼으로 번역·자동 모드를 조절하세요</string>
+    <string name="notif_text">음량 아래 길게 누르기 또는 아래 버튼으로 번역</string>
     <string name="start">번역 시작</string>
     <string name="stop">번역 중지</string>
     <string name="section_engine">번역 엔진</string>
@@ -22,6 +22,17 @@
     <string name="usage_today">오늘 사용: Gemini %1$d회 · Gemma %2$d회 · Claude %3$d회 · ML Kit %4$d회</string>
     <string name="perm_overlay">다른 앱 위에 표시 권한이 필요합니다</string>
     <string name="perm_capture_denied">화면 캡처 권한이 거부되었습니다</string>
-    <string name="help">사용법: 시작을 누르면 화면 캡처 권한을 묻고 플로팅 버튼이 뜹니다.\n• 버튼 탭: 지금 화면 번역\n• 버튼 길게 누르기: 누르는 동안 원문 보기\n• 자동 모드: 스크롤이 멈출 때마다 자동 번역 (같은 화면은 저장해 재사용)\n• 비교: 두 엔진 결과를 나란히 보기\n• ML Kit 번역 모델(영·일·중→한)은 처음 쓸 때 자동 다운로드됩니다.</string>
+    <string name="accessibility_desc">번역이 켜져 있는 동안 음량 버튼 길게 누르기를 번역 단축키로 씁니다. 화면 내용은 읽지 않습니다.</string>
+    <string name="volume_trigger">음량 버튼 길게 누르기로 조작 (아래: 번역, 위: 원문 보기/숨기기)</string>
+    <string name="open_accessibility">접근성 설정 열기 (음량 버튼 단축키 켜기)</string>
+    <string name="compare_now">마지막 화면을 두 엔진으로 비교</string>
+    <string name="toggle_original">원문 보기 / 번역 보기</string>
+    <string name="last_status">마지막 상태: %1$s</string>
+    <string name="help">사용법: 시작을 누르면 화면 캡처 권한을 묻고 번역이 켜집니다 (플로팅 버튼 없음).
+• 음량 아래 길게: 지금 화면 번역 (접근성 설정에서 이 앱을 켜야 함)
+• 음량 위 길게: 원문 보기 ↔ 번역 보기
+• 알림창의 번역 / 원문 보기 / 중지 버튼, 빠른 설정 타일도 같은 동작
+• 자동 모드: 스크롤이 멈출 때마다 자동 번역 (같은 화면은 저장해 재사용)
+• 이미 한국어인 글자는 건너뜁니다.</string>
     <string name="download_mlkit">ML Kit 오프라인 번역 모델 미리 받기</string>
 </resources>

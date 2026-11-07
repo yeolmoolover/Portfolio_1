@@ -1,18 +1,22 @@
 package com.portfolio.screentranslator.translate
 
-import android.graphics.Bitmap
 import android.graphics.Rect
 
 /** One block of recognised source text, in screen pixel coordinates. */
 data class SourceBlock(
     val id: Int,
     val text: String,
+    /** Bounding box of the whole block (paragraph / speech bubble). */
     val box: Rect,
     /** true when the OCR thinks the lines run vertically (common in Japanese manga). */
     val vertical: Boolean = false,
+    /** Tight boxes of the individual lines; the background is painted only here. */
+    val lines: List<Rect> = listOf(box),
+    /** Typical glyph height in px, used to size the translated text like the original. */
+    val lineHeight: Int = box.height(),
 )
 
-/** A translated block to draw. `box` is in screen pixels. */
+/** A translated block to draw. All rects are in screen pixels. */
 data class TranslatedBlock(
     val sourceId: Int?,          // null for SFX the model found on its own
     val text: String,
@@ -20,6 +24,8 @@ data class TranslatedBlock(
     val isSfx: Boolean,
     val bgColor: Int,
     val fgColor: Int,
+    val lines: List<Rect> = listOf(box),
+    val lineHeight: Int = box.height(),
 )
 
 data class TranslationRequest(

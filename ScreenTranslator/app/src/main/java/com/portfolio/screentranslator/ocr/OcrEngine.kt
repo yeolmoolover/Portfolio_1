@@ -17,13 +17,19 @@ import kotlinx.coroutines.tasks.await
 /**
  * ML Kit text recognition. In "auto" mode the Japanese and Chinese recognisers run in
  * parallel (both also read Latin) and the one that found more CJK characters wins.
+ *
+ * Blocks that are already Korean are dropped: the target language is Korean, and the
+ * CJK recognisers otherwise read Hangul as random hanzi/kana and produce garbage.
  */
 class OcrEngine {
     private val latin: TextRecognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     private val japanese: TextRecognizer by lazy { TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build()) }
     private val chinese: TextRecognizer by lazy { TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build()) }
 
-    suspend fun recognise(bitmap: Bitmap, sourceLang: String): List<SourceBlock> {
+    /** Result of a pass: blocks to translate plus how much Korean was on screen. */
+    data class Result(val blocks: List<SourceBlock>, val koreanBlocks: Int)
+
+    suspend fun recognise(bitmap: Bitmap, sourceLang: String): Result {
         val image = InputImage.fromBitmap(bitmap, 0)
         val text: Text = when (sourceLang) {
             "ja" -> japanese.process(image).await()
@@ -51,24 +57,46 @@ class OcrEngine {
         return total + kana * 3 + han
     }
 
-    private fun toBlocks(text: Text, w: Int, h: Int): List<SourceBlock> {
+    private fun toBlocks(text: Text, w: Int, h: Int): Result {
         val out = ArrayList<SourceBlock>()
+        var korean = 0
         var id = 1
         for (block in text.textBlocks) {
             val box = block.boundingBox ?: continue
             val s = block.text.trim()
-            if (s.length < 1) continue
-            if (!hasLetters(s)) continue
-            val r = Rect(box)
-            r.left = r.left.coerceIn(0, w); r.right = r.right.coerceIn(0, w)
-            r.top = r.top.coerceIn(0, h); r.bottom = r.bottom.coerceIn(0, h)
+            if (s.isEmpty() || !s.any { it.isLetter() }) continue
+            if (isMostlyHangul(s)) { korean++; continue }
+            val r = clamp(Rect(box), w, h)
             if (r.width() < 4 || r.height() < 4) continue
+
+            val lineRects = block.lines.mapNotNull { it.boundingBox?.let { b -> clamp(Rect(b), w, h) } }
+                .filter { it.width() >= 2 && it.height() >= 2 }
+                .ifEmpty { listOf(r) }
+            val lineHeight = lineRects.map { it.height() }.sorted().let { it[it.size / 2] }
             val vertical = block.lines.size >= 2 && r.height() > r.width() * 1.8 &&
-                block.lines.all { (it.boundingBox?.width() ?: 0) <= (it.boundingBox?.height() ?: 0) * 1.5 }
-            out += SourceBlock(id++, s, r, vertical)
+                lineRects.all { it.width() <= it.height() * 1.5 }
+            out += SourceBlock(id++, s, r, vertical, lineRects, lineHeight)
         }
-        return out
+        return Result(out, korean)
     }
 
-    private fun hasLetters(s: String): Boolean = s.any { it.isLetter() }
+    private fun clamp(r: Rect, w: Int, h: Int): Rect {
+        r.left = r.left.coerceIn(0, w); r.right = r.right.coerceIn(0, w)
+        r.top = r.top.coerceIn(0, h); r.bottom = r.bottom.coerceIn(0, h)
+        return r
+    }
+
+    companion object {
+        /** True when more than half of the letters are Hangul (already Korean - skip). */
+        fun isMostlyHangul(s: String): Boolean {
+            var hangul = 0; var letters = 0
+            for (ch in s) {
+                if (!ch.isLetter()) continue
+                letters++
+                val c = ch.code
+                if (c in 0xAC00..0xD7A3 || c in 0x1100..0x11FF || c in 0x3130..0x318F) hangul++
+            }
+            return letters > 0 && hangul * 2 > letters
+        }
+    }
 }

@@ -26,7 +26,7 @@ class OverlayLayer(
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val views = ArrayList<OverlayView>()
-    private val pad = (4 * context.resources.displayMetrics.density).toInt()
+    private val density = context.resources.displayMetrics.density
 
     /** Must be called on the main thread. */
     var blocks: List<TranslatedBlock> = emptyList()
@@ -37,9 +37,12 @@ class OverlayLayer(
         }
 
     private fun addBlock(b: TranslatedBlock) {
+        // Window = block box plus the largest padding the view may paint around a line.
+        val pad = (maxOf(4 * density, b.lineHeight * 0.3f)).toInt() + 1
         val r = Rect(b.box).apply { inset(-pad, -pad) }
         if (r.width() <= 0 || r.height() <= 0) return
-        val shifted = b.copy(box = Rect(pad, pad, pad + b.box.width(), pad + b.box.height()))
+        fun shift(x: Rect) = Rect(x.left - r.left, x.top - r.top, x.right - r.left, x.bottom - r.top)
+        val shifted = b.copy(box = shift(b.box), lines = b.lines.map(::shift))
         val v = OverlayView(context).apply {
             fontScale = this@OverlayLayer.fontScale
             blocks = listOf(shifted)

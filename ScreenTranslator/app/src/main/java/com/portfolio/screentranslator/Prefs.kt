@@ -59,6 +59,16 @@ class Prefs(context: Context) {
         get() = sp.getFloat("opacity2", 1.0f)
         set(v) = sp.edit().putFloat("opacity2", v.coerceIn(0.3f, 1.0f)).apply()
 
+    /** Long-pressed volume keys trigger translate / show-original (needs the accessibility service). */
+    var volumeTrigger: Boolean
+        get() = sp.getBoolean("volume_trigger", true)
+        set(v) = sp.edit().putBoolean("volume_trigger", v).apply()
+
+    /** Last status / error text, shown in the notification and on the main screen. */
+    var lastStatus: String
+        get() = sp.getString("last_status", "") ?: ""
+        set(v) = sp.edit().putString("last_status", v).apply()
+
     var fontScale: Float
         get() = sp.getFloat("font_scale", 1.0f)
         set(v) = sp.edit().putFloat("font_scale", v.coerceIn(0.6f, 1.6f)).apply()

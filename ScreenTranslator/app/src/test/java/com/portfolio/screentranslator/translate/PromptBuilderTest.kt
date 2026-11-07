@@ -30,7 +30,7 @@ class PromptBuilderTest {
     @Test
     fun userTextListsBlocksAndHistory() {
         val req = TranslationRequest(
-            blocks = listOf(SourceBlock(1, "こんにちは", android.graphics.Rect(), vertical = true)),
+            blocks = listOf(SourceBlock(1, "こんにちは", android.graphics.Rect(), vertical = true, lines = emptyList(), lineHeight = 0)),
             imageJpeg = null, imageWidth = 0, imageHeight = 0, screenWidth = 1, screenHeight = 1,
             sourceLangHint = "ja", history = listOf("前" to "이전"),
         )
@@ -45,5 +45,15 @@ class PromptBuilderTest {
         assertEquals("ja", LangDetect.guess("今日はいい天気ですね"))
         assertEquals("zh", LangDetect.guess("今天天气很好"))
         assertEquals("en", LangDetect.guess("Hello there"))
+    }
+}
+
+class HangulSkipTest {
+    @Test
+    fun koreanBlocksAreDetected() {
+        assertTrue(com.portfolio.screentranslator.ocr.OcrEngine.isMostlyHangul("사용 편의성에 대해 말이야"))
+        assertTrue(com.portfolio.screentranslator.ocr.OcrEngine.isMostlyHangul("Portfolio_1 · 화면에서 번역하십시오"))
+        assertEquals(false, com.portfolio.screentranslator.ocr.OcrEngine.isMostlyHangul("今日はいい天気ですね"))
+        assertEquals(false, com.portfolio.screentranslator.ocr.OcrEngine.isMostlyHangul("Hello world 123"))
     }
 }

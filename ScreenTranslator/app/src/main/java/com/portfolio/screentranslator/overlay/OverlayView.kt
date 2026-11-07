@@ -15,9 +15,10 @@ import kotlin.math.max
 import kotlin.math.min
 
 /**
- * Full-screen, non-touchable view that paints translations on top of the original text.
- * - Normal blocks: filled box in the sampled background colour + text in the sampled text colour,
- *   font shrunk until it fits the original box (so the artwork around it stays visible).
+ * Paints one or more translated blocks.
+ * - Normal blocks: the background is painted only where the original *lines* were (tight
+ *   per-line boxes in the sampled background colour), and the translation is laid out
+ *   across the block at roughly the original glyph size, shrinking until it fits.
  * - SFX: no box, outlined text, so the drawing underneath is not hidden.
  */
 class OverlayView(context: Context) : View(context) {
@@ -44,15 +45,22 @@ class OverlayView(context: Context) : View(context) {
     }
 
     private fun drawBlock(canvas: Canvas, b: TranslatedBlock) {
-        val pad = 4 * density
-        val box = RectF(b.box).apply { inset(-pad, -pad) }
         boxPaint.color = b.bgColor
         boxPaint.style = Paint.Style.FILL
-        canvas.drawRoundRect(box, 4 * density, 4 * density, boxPaint)
+        val padX = 3 * density
+        // Vertical padding closes the gap between consecutive lines so the box reads as one.
+        val padY = max(2 * density, b.lineHeight * 0.25f)
+        for (line in b.lines) {
+            val r = RectF(line).apply { inset(-padX, -padY) }
+            canvas.drawRoundRect(r, 3 * density, 3 * density, boxPaint)
+        }
 
         textPaint.color = b.fgColor
         textPaint.isFakeBoldText = false
-        val layout = fitText(b.text, textPaint, b.box, minSp = 8f, maxSp = 22f * fontScale, sp = fontScale) ?: return
+        val scaled = resources.displayMetrics.scaledDensity
+        // Start at the original glyph size (line height ~ 1.2 x font size), then shrink to fit.
+        val startSp = (b.lineHeight / scaled / 1.2f * fontScale).coerceIn(8f, 40f)
+        val layout = fitText(b.text, textPaint, b.box, minSp = 7f, startSp = startSp) ?: return
         canvas.save()
         val dy = b.box.top + max(0f, (b.box.height() - layout.height) / 2f)
         canvas.translate(b.box.left.toFloat(), dy)
@@ -61,8 +69,9 @@ class OverlayView(context: Context) : View(context) {
     }
 
     private fun drawSfx(canvas: Canvas, b: TranslatedBlock) {
-        val maxSp = 26f * fontScale
-        val fill = fitText(b.text, textPaint.apply { color = Color.WHITE; isFakeBoldText = true }, b.box, 10f, maxSp, fontScale)
+        val scaled = resources.displayMetrics.scaledDensity
+        val startSp = (b.box.height() / scaled * 0.8f * fontScale).coerceIn(10f, 30f)
+        val fill = fitText(b.text, textPaint.apply { color = Color.WHITE; isFakeBoldText = true }, b.box, 10f, startSp)
             ?: return
         strokePaint.textSize = textPaint.textSize
         strokePaint.color = Color.BLACK
@@ -77,15 +86,12 @@ class OverlayView(context: Context) : View(context) {
         canvas.restore()
     }
 
-    /** Shrinks the font until the wrapped text fits inside [box]; returns null if the box is unusable. */
-    private fun fitText(text: String, paint: TextPaint, box: Rect, minSp: Float, maxSp: Float, sp: Float): StaticLayout? {
+    /** Shrinks the font from [startSp] until the wrapped text fits inside [box]. */
+    private fun fitText(text: String, paint: TextPaint, box: Rect, minSp: Float, startSp: Float): StaticLayout? {
         val width = box.width()
         if (width < 8 || box.height() < 6) return null
         val scaled = resources.displayMetrics.scaledDensity
-        var size = maxSp
-        // start from a size proportional to the original glyph height, never above maxSp
-        val fromBox = min(maxSp, box.height() / scaled * 0.9f)
-        size = min(size, max(minSp, fromBox))
+        var size = max(minSp, startSp)
         while (true) {
             paint.textSize = size * scaled
             val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, width)
