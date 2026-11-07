@@ -29,6 +29,8 @@ data class TranslatedBlock(
     /** Source was vertical (Japanese manga). `lines` are the original columns to erase;
      *  `box` is the horizontal area where the translation is written instead. */
     val vertical: Boolean = false,
+    /** Original block box (erased in box mode together with `lines`). */
+    val srcBox: Rect = box,
 )
 
 data class TranslationRequest(

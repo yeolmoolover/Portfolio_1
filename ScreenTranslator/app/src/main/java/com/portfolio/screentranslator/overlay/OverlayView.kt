@@ -54,9 +54,10 @@ class OverlayView(context: Context) : View(context) {
         // anti-aliased edges and descenders of the original text stay visible.
         val pad = max(4 * density, b.lineHeight * 0.4f)
         val sorted = if (b.vertical) b.lines.sortedBy { it.left } else b.lines.sortedBy { it.top }
+        if (outlineStyle) { drawText(canvas, b, pad); return }   // outline mode: no fill anywhere
         if (b.vertical && sorted.isNotEmpty()) {
             // ML Kit returns vertical CJK text as irregular fragments; erase the whole source area.
-            val all = Rect(sorted[0]); for (l in sorted) all.union(l)
+            val all = Rect(b.srcBox); for (l in sorted) all.union(l)
             canvas.drawRoundRect(RectF(all).apply { inset(-pad * 1.2f, -pad * 1.2f) }, 4 * density, 4 * density, boxPaint)
         }
         for (line in sorted) {
@@ -71,6 +72,10 @@ class OverlayView(context: Context) : View(context) {
                 canvas.drawRect(gap.apply { inset(-pad * 0.5f, -pad * 0.5f) }, boxPaint)
         }
 
+        drawText(canvas, b, pad)
+    }
+
+    private fun drawText(canvas: Canvas, b: TranslatedBlock, pad: Float) {
         textPaint.color = b.fgColor
         textPaint.isFakeBoldText = true   // thin Korean glyphs over artwork are hard to read
         val scaled = resources.displayMetrics.scaledDensity
@@ -93,7 +98,7 @@ class OverlayView(context: Context) : View(context) {
             // Thick halo in the background colour hides whatever is directly under the glyphs.
             strokePaint.textSize = textPaint.textSize
             strokePaint.color = b.bgColor
-            strokePaint.strokeWidth = max(3 * density, textPaint.textSize * 0.22f)
+            strokePaint.strokeWidth = max(4 * density, textPaint.textSize * 0.34f)
             strokePaint.isFakeBoldText = true
             StaticLayout.Builder.obtain(b.text, 0, b.text.length, strokePaint, max(1, b.box.width()))
                 .setAlignment(Layout.Alignment.ALIGN_CENTER).setIncludePad(false).build().draw(canvas)

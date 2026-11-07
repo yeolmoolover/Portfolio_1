@@ -41,11 +41,12 @@ class OverlayLayer(
         // Window = block box plus the largest padding the view may paint around a line.
         val pad = (maxOf(6 * density, b.lineHeight * 0.55f)).toInt() + 1
         val r = Rect(b.box)
+        r.union(b.srcBox)
         for (l in b.lines) r.union(l)
         r.inset(-pad, -pad)
         if (r.width() <= 0 || r.height() <= 0) return
         fun shift(x: Rect) = Rect(x.left - r.left, x.top - r.top, x.right - r.left, x.bottom - r.top)
-        val shifted = b.copy(box = shift(b.box), lines = b.lines.map(::shift))
+        val shifted = b.copy(box = shift(b.box), lines = b.lines.map(::shift), srcBox = shift(b.srcBox))
         val v = OverlayView(context).apply {
             fontScale = this@OverlayLayer.fontScale
             outlineStyle = this@OverlayLayer.outlineStyle

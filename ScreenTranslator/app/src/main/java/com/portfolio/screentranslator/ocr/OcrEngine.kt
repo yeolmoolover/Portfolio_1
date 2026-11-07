@@ -121,7 +121,39 @@ class OcrEngine {
             val lineHeight = glyph[glyph.size / 2]
             out += SourceBlock(id++, s, r, vertical, lineRects, lineHeight)
         }
-        return Result(out, korean)
+        return Result(mergeVerticalColumns(out), korean)
+    }
+
+    /**
+     * ML Kit often returns each column of a vertical speech bubble as its own block. Merge
+     * vertical blocks that sit side by side (small horizontal gap, overlapping in height)
+     * into one block, text joined right-to-left (manga reading order), so the bubble gets
+     * one translation and one erase area.
+     */
+    private fun mergeVerticalColumns(blocks: List<SourceBlock>): List<SourceBlock> {
+        val groups = ArrayList<MutableList<SourceBlock>>()
+        for (b in blocks) {
+            if (!b.vertical) { groups += mutableListOf(b); continue }
+            val g = groups.firstOrNull { grp ->
+                grp.all { it.vertical } && grp.any { o ->
+                    val gapX = maxOf(0, maxOf(b.box.left, o.box.left) - minOf(b.box.right, o.box.right))
+                    val overlapY = minOf(b.box.bottom, o.box.bottom) - maxOf(b.box.top, o.box.top)
+                    val glyph = maxOf(b.lineHeight, o.lineHeight)
+                    gapX <= glyph * 2.2f && overlapY >= minOf(b.box.height(), o.box.height()) * 0.3f
+                }
+            }
+            if (g != null) g += b else groups += mutableListOf(b)
+        }
+        var id = 1
+        return groups.map { g ->
+            if (g.size == 1) g[0].copy(id = id++) else {
+                val sorted = g.sortedByDescending { it.box.right }          // right-to-left
+                val box = Rect(sorted[0].box); for (o in sorted) box.union(o.box)
+                val lines = sorted.flatMap { it.lines }
+                val glyphs = sorted.map { it.lineHeight }.sorted()
+                SourceBlock(id++, sorted.joinToString(" ") { it.text.replace("\n", "") }, box, true, lines, glyphs[glyphs.size / 2])
+            }
+        }
     }
 
     /** Intersection area / smaller area. */

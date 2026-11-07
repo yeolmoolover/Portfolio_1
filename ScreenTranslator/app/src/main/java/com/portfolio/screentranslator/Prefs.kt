@@ -60,7 +60,7 @@ class Prefs(context: Context) {
 
     /** box: opaque panel behind the translation. outline: no panel, thick halo around the glyphs. */
     var textStyle: String
-        get() = sp.getString("text_style", "box") ?: "box"
+        get() = sp.getString("text_style", "outline") ?: "outline"
         set(v) = sp.edit().putString("text_style", v).apply()
 
     var fontScale: Float

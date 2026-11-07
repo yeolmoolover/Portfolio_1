@@ -419,7 +419,7 @@ class CaptureService : Service() {
                 val (bg, fg) = ImageUtil.sampleColors(bmp, src.box)
                 if (src.vertical) {
                     // Write the translation horizontally, centred on the original columns.
-                    out += TranslatedBlock(src.id, t.text, horizontalBox(src), false, bg, fg, src.lines.map { Rect(it) }, src.lineHeight, vertical = true)
+                    out += TranslatedBlock(src.id, t.text, horizontalBox(src), false, bg, fg, src.lines.map { Rect(it) }, src.lineHeight, vertical = true, srcBox = Rect(src.box))
                 } else {
                     out += TranslatedBlock(src.id, t.text, Rect(src.box), false, bg, fg, src.lines.map { Rect(it) }, src.lineHeight)
                 }
