@@ -71,7 +71,6 @@ class MainActivity : AppCompatActivity() {
             setText(langLabels[langValues.indexOf(prefs.sourceLang).coerceAtLeast(0)], false)
         }
         val comic = findViewById<SwitchMaterial>(R.id.comic_mode).apply { isChecked = prefs.comicMode }
-        val volume = findViewById<SwitchMaterial>(R.id.volume_trigger).apply { isChecked = prefs.volumeTrigger }
         val auto = findViewById<SwitchMaterial>(R.id.auto_mode).apply { isChecked = prefs.autoMode }
         val opacity = findViewById<Slider>(R.id.opacity).apply { value = prefs.opacity }
         val fontScale = findViewById<Slider>(R.id.font_scale).apply { value = prefs.fontScale }
@@ -85,7 +84,6 @@ class MainActivity : AppCompatActivity() {
             prefs.primaryEngine = engineValues[engineLabels.indexOf(engine.text.toString()).coerceAtLeast(0)]
             prefs.sourceLang = langValues[langLabels.indexOf(lang.text.toString()).coerceAtLeast(0)]
             prefs.comicMode = comic.isChecked
-            prefs.volumeTrigger = volume.isChecked
             prefs.autoMode = auto.isChecked
             prefs.opacity = opacity.value
             prefs.fontScale = fontScale.value
@@ -114,9 +112,6 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<MaterialButton>(R.id.btn_stop).setOnClickListener {
             startService(Intent(this, CaptureService::class.java).setAction(CaptureService.ACTION_STOP))
-        }
-        findViewById<MaterialButton>(R.id.btn_accessibility).setOnClickListener {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
         findViewById<MaterialButton>(R.id.btn_compare).setOnClickListener {
             if (!CaptureService.running) { Toast.makeText(this, "번역이 실행 중일 때만 가능합니다", Toast.LENGTH_SHORT).show(); return@setOnClickListener }
