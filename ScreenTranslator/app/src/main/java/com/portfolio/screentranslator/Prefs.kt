@@ -18,9 +18,9 @@ class Prefs(context: Context) {
         get() = sp.getString("claude_key", "") ?: ""
         set(v) = sp.edit().putString("claude_key", v.trim()).apply()
 
-    /** gemini | claude | mlkit */
+    /** gemini | claude */
     var primaryEngine: String
-        get() = sp.getString("primary_engine", "gemini") ?: "gemini"
+        get() = (sp.getString("primary_engine", "gemini") ?: "gemini").let { if (it == "mlkit") "gemini" else it }
         set(v) = sp.edit().putString("primary_engine", v).apply()
 
     // Free-tier limits seen in AI Studio (2026-11): 3.5 Flash-Lite = 500 RPD, Flash models = 20 RPD.
@@ -89,7 +89,7 @@ class Prefs(context: Context) {
         val e = sp.edit()
         if (sp.getString("usage_day", "") != today) {
             e.putString("usage_day", today)
-            for (k in listOf("gemini", "gemma", "claude", "mlkit")) e.putInt("usage_$k", 0)
+            for (k in listOf("gemini", "gemma", "claude")) e.putInt("usage_$k", 0)
         }
         e.putInt("usage_$engine", usage(engine) + 1).apply()
     }

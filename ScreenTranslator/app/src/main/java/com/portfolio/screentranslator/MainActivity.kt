@@ -15,14 +15,11 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.slider.Slider
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputEditText
-import com.portfolio.screentranslator.translate.MlKitEngine
-import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
@@ -104,8 +101,9 @@ class MainActivity : AppCompatActivity() {
             if (Build.VERSION.SDK_INT >= 33 &&
                 ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
             ) notifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-            if (prefs.primaryEngine == "gemini" && prefs.geminiKey.isBlank() && prefs.claudeKey.isBlank()) {
-                Toast.makeText(this, "API 키가 없어 ML Kit(오프라인)만 사용합니다", Toast.LENGTH_LONG).show()
+            if (prefs.geminiKey.isBlank() && prefs.claudeKey.isBlank()) {
+                Toast.makeText(this, "Gemini 또는 Claude API 키를 먼저 입력하세요", Toast.LENGTH_LONG).show()
+                return@setOnClickListener
             }
             val mpm = getSystemService(MediaProjectionManager::class.java)
             projectionLauncher.launch(mpm.createScreenCaptureIntent())
@@ -131,15 +129,6 @@ class MainActivity : AppCompatActivity() {
             startService(Intent(this, CaptureService::class.java).setAction(CaptureService.ACTION_TRANSLATE))
             finish()
         }
-        findViewById<MaterialButton>(R.id.btn_download_mlkit).setOnClickListener { v ->
-            v.isEnabled = false
-            lifecycleScope.launch {
-                runCatching { MlKitEngine().downloadAll(wifiOnly = false) }
-                    .onSuccess { Toast.makeText(this@MainActivity, "ML Kit 모델 준비 완료", Toast.LENGTH_SHORT).show() }
-                    .onFailure { Toast.makeText(this@MainActivity, "다운로드 실패: ${it.message}", Toast.LENGTH_LONG).show() }
-                v.isEnabled = true
-            }
-        }
         updateUsage()
     }
 
@@ -147,7 +136,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateUsage() {
         findViewById<android.widget.TextView>(R.id.usage).text = getString(
-            R.string.usage_today, prefs.usage("gemini"), prefs.usage("gemma"), prefs.usage("claude"), prefs.usage("mlkit"),
+            R.string.usage_today, prefs.usage("gemini"), prefs.usage("gemma"), prefs.usage("claude"),
         )
         findViewById<android.widget.TextView>(R.id.last_status).text =
             getString(R.string.last_status, prefs.lastStatus.ifBlank { "-" })

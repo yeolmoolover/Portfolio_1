@@ -2,12 +2,10 @@
     <string-array name="engines">
         <item>Gemini (무료 티어 가능)</item>
         <item>Claude</item>
-        <item>ML Kit (오프라인, 품질 낮음)</item>
     </string-array>
     <string-array name="engine_values">
         <item>gemini</item>
         <item>claude</item>
-        <item>mlkit</item>
     </string-array>
     <string-array name="source_langs">
         <item>일본어만 번역</item>

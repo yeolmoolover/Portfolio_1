@@ -40,12 +40,6 @@ class PromptBuilderTest {
         assertTrue(t.contains("前 => 이전"))
     }
 
-    @Test
-    fun languageGuess() {
-        assertEquals("ja", LangDetect.guess("今日はいい天気ですね"))
-        assertEquals("zh", LangDetect.guess("今天天气很好"))
-        assertEquals("en", LangDetect.guess("Hello there"))
-    }
 }
 
 class HangulSkipTest {

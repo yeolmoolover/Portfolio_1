@@ -6,7 +6,7 @@ import java.security.MessageDigest
 
 /**
  * Picks the engine order from settings and falls through on quota / failure:
- *   primary (Gemini or Claude) -> Gemma (free, huge quota) -> ML Kit (offline).
+ *   primary (Gemini or Claude) -> Gemma (free, huge quota) -> the other LLM if it has a key.
  * Also caches results by the OCR text so re-visiting a screen costs nothing.
  */
 class EngineChain(private val prefs: Prefs) {
@@ -14,7 +14,6 @@ class EngineChain(private val prefs: Prefs) {
     val gemini = GeminiEngine("gemini", { prefs.geminiKey }, { prefs.geminiModel })
     val gemma = GeminiEngine("gemma", { prefs.geminiKey }, { prefs.gemmaModel }, isGemma = true)
     val claude = ClaudeEngine({ prefs.claudeKey }, { prefs.claudeModel })
-    val mlkit = MlKitEngine()
 
     private val cache = object : LinkedHashMap<String, TranslationResult>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, TranslationResult>?) = size > 200
@@ -28,7 +27,6 @@ class EngineChain(private val prefs: Prefs) {
     fun engineByName(n: String): TranslationEngine = when (n) {
         "claude" -> claude
         "gemma" -> gemma
-        "mlkit" -> mlkit
         else -> gemini
     }
 
@@ -36,10 +34,8 @@ class EngineChain(private val prefs: Prefs) {
         val list = ArrayList<TranslationEngine>()
         when (prefs.primaryEngine) {
             "claude" -> { list += claude; if (prefs.geminiKey.isNotBlank()) { list += gemini; list += gemma } }
-            "mlkit" -> {}
             else -> { list += gemini; list += gemma; if (prefs.claudeKey.isNotBlank()) list += claude }
         }
-        list += mlkit
         return list
     }
 
@@ -80,6 +76,7 @@ class EngineChain(private val prefs: Prefs) {
                 errors += "${engine.name}: ${e.javaClass.simpleName} ${e.message?.take(80)}"
             }
         }
+        if (errors.isEmpty()) errors += "사용할 수 있는 API 키가 없습니다 (설정에서 Gemini 또는 Claude 키 입력)"
         lastError = errors.joinToString(" / ")
         throw EngineUnavailableException(lastError ?: "모든 엔진 실패")
     }

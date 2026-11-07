@@ -19,7 +19,7 @@
     <string name="auto_mode">자동 모드 (화면이 멈추면 자동 번역)</string>
     <string name="opacity">번역 배경 불투명도 (80% 초과 시 번역 상자 위를 누르는 터치는 차단됨)</string>
     <string name="font_scale">글자 크기 배율</string>
-    <string name="usage_today">오늘 사용: Gemini %1$d회 · Gemma %2$d회 · Claude %3$d회 · ML Kit %4$d회</string>
+    <string name="usage_today">오늘 사용: Gemini %1$d회 · Gemma %2$d회 · Claude %3$d회</string>
     <string name="perm_overlay">다른 앱 위에 표시 권한이 필요합니다</string>
     <string name="perm_capture_denied">화면 캡처 권한이 거부되었습니다</string>
     <string name="accessibility_desc">번역이 켜져 있는 동안 음량 버튼 길게 누르기를 번역 단축키로 씁니다. 화면 내용은 읽지 않습니다.</string>
@@ -34,5 +34,4 @@
 • 알림창의 번역 / 원문 보기 / 중지 버튼, 빠른 설정 타일도 같은 동작
 • 자동 모드: 스크롤이 멈출 때마다 자동 번역 (같은 화면은 저장해 재사용)
 • 이미 한국어인 글자는 건너뜁니다.</string>
-    <string name="download_mlkit">ML Kit 오프라인 번역 모델 미리 받기</string>
 </resources>
