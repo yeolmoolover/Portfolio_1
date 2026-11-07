@@ -14,6 +14,7 @@ import com.anthropic.models.messages.MessageCreateParams
 import com.anthropic.models.messages.OutputConfig
 import com.anthropic.models.messages.StopReason
 import com.anthropic.models.messages.TextBlockParam
+import com.anthropic.models.messages.ThinkingConfigDisabled
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -58,13 +59,17 @@ class ClaudeEngine(
         }
         content += ContentBlockParam.ofText(TextBlockParam.builder().text(PromptBuilder.userText(req)).build())
 
-        val params = MessageCreateParams.builder()
-            .model(modelProvider())
-            .maxTokens(2048L)
+        val model = modelProvider()
+        val builder = MessageCreateParams.builder()
+            .model(model)
+            .maxTokens(1024L)
             .system(PromptBuilder.SYSTEM)
             .outputConfig(OutputConfig.builder().effort(OutputConfig.Effort.LOW).build())
             .addUserMessageOfContentBlockParams(content)
-            .build()
+        // Haiku 5.5 accepts thinking "disabled" at effort <= high; Sonnet/Opus 5.5 reject it
+        // (400), so only send it for Haiku. Saves the thinking tokens' latency on a short job.
+        if (model.startsWith("claude-haiku")) builder.thinking(ThinkingConfigDisabled.builder().build())
+        val params = builder.build()
 
         // Stream so bubbles can be drawn as they complete.
         val parser = onPartial?.let { PromptBuilder.IncrementalParser(it) }
