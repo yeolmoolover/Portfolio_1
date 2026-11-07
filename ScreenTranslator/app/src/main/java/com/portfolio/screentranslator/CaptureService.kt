@@ -377,6 +377,23 @@ class CaptureService : Service() {
     private fun toDrawable(bmp: Bitmap, blocks: List<SourceBlock>, result: TranslationResult): List<TranslatedBlock> {
         val byId = blocks.associateBy { it.id }
         val out = ArrayList<TranslatedBlock>()
+        val gap = (6 * resources.displayMetrics.density).toInt()
+        /** Horizontal panel for a vertical block, widened only until it would hit a neighbour. */
+        fun horizontalBox(src: SourceBlock): Rect {
+            val cx = src.box.centerX(); val cy = src.box.centerY()
+            val want = maxOf(src.box.width(), (src.box.height() * 1.1f).toInt()).coerceAtMost((bmp.width * 0.8f).toInt())
+            var left = cx - want / 2; var right = cx + want / 2
+            val top = cy - src.box.height() / 2; val bottom = cy + src.box.height() / 2
+            val others = blocks.filter { it.id != src.id }.map { it.box } + out.map { it.box }
+            for (o in others) {
+                if (o.bottom <= top || o.top >= bottom) continue          // no vertical overlap
+                if (o.right <= src.box.left && o.right + gap > left) left = o.right + gap
+                if (o.left >= src.box.right && o.left - gap < right) right = o.left - gap
+            }
+            left = left.coerceAtLeast(0); right = right.coerceAtMost(bmp.width)
+            if (right - left < src.box.width()) { left = src.box.left; right = src.box.right }
+            return Rect(left, top, right, bottom)
+        }
         for (t in result.items) {
             if (t.isSfx) {
                 val f = t.boxNorm ?: continue
@@ -391,15 +408,8 @@ class CaptureService : Service() {
                 val src = byId[t.sourceId] ?: continue
                 val (bg, fg) = ImageUtil.sampleColors(bmp, src.box)
                 if (src.vertical) {
-                    // Write the translation horizontally, centred on the original columns:
-                    // width ~ the column height (what a bubble usually allows), clamped to the screen.
-                    val cx = src.box.centerX(); val cy = src.box.centerY()
-                    val w = maxOf(src.box.width(), (src.box.height() * 1.1f).toInt())
-                        .coerceAtMost((bmp.width * 0.8f).toInt())
-                    val h = src.box.height()
-                    val hbox = Rect(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
-                    hbox.offset((-hbox.left).coerceAtLeast(0) + (bmp.width - hbox.right).coerceAtMost(0), 0)
-                    out += TranslatedBlock(src.id, t.text, hbox, false, bg, fg, src.lines.map { Rect(it) }, src.lineHeight, vertical = true)
+                    // Write the translation horizontally, centred on the original columns.
+                    out += TranslatedBlock(src.id, t.text, horizontalBox(src), false, bg, fg, src.lines.map { Rect(it) }, src.lineHeight, vertical = true)
                 } else {
                     out += TranslatedBlock(src.id, t.text, Rect(src.box), false, bg, fg, src.lines.map { Rect(it) }, src.lineHeight)
                 }

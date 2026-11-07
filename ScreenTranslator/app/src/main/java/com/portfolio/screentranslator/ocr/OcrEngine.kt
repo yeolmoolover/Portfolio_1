@@ -47,12 +47,14 @@ class OcrEngine {
                 if (score(a) >= score(b)) a else b
             }
         }
-        // Regions the Korean model reads as real Hangul (line level, so mixed blocks work too).
-        val koreanRects = ko.await().textBlocks.flatMap { it.lines }
-            .filter { isMostlyHangul(it.text) }
-            .mapNotNull { it.boundingBox }
-        toBlocks(text, bitmap.width, bitmap.height, koreanRects, sourceLang)
+        // Lines the Korean model reads as Hangul, with how many Hangul letters each holds.
+        val koreanLines = ko.await().textBlocks.flatMap { it.lines }
+            .filter { isMostlyHangul(it.text) && it.text.count { c -> c.code in 0xAC00..0xD7A3 } >= 2 }
+            .mapNotNull { l -> l.boundingBox?.let { KoLine(it, l.text.count { c -> c.code in 0xAC00..0xD7A3 }) } }
+        toBlocks(text, bitmap.width, bitmap.height, koreanLines, sourceLang)
     }
+
+    private class KoLine(val box: Rect, val hangul: Int)
 
     /** True when the block's letters are mostly in the script of [lang]. */
     private fun matchesLanguage(s: String, lang: String): Boolean {
@@ -88,7 +90,7 @@ class OcrEngine {
         return total + kana * 3 + han
     }
 
-    private fun toBlocks(text: Text, w: Int, h: Int, koreanRects: List<Rect>, lang: String): Result {
+    private fun toBlocks(text: Text, w: Int, h: Int, koreanLines: List<KoLine>, lang: String): Result {
         val out = ArrayList<SourceBlock>()
         var korean = 0
         var id = 1
@@ -101,13 +103,17 @@ class OcrEngine {
             val r = clamp(Rect(box), w, h)
             if (r.width() < 4 || r.height() < 4) continue
 
-            // Drop the Korean lines from this block; if most of it was Korean, drop the block.
             val allLines = block.lines.mapNotNull { it.boundingBox?.let { b -> clamp(Rect(b), w, h) } }
                 .filter { it.width() >= 2 && it.height() >= 2 }
-            val foreignLines = allLines.filter { line -> koreanRects.none { k -> overlap(line, k) > 0.4f } }
-            if (allLines.isNotEmpty() && foreignLines.size * 2 <= allLines.size) { korean++; continue }
-            // Mostly foreign block with a few Korean lines: keep it, paint only the foreign lines.
-            val lineRects = foreignLines.ifEmpty { listOf(r) }
+            // Is this block really Korean? The Korean model also emits Hangul garbage over
+            // Chinese/Japanese glyphs, so require BOTH: most lines covered by Hangul lines AND
+            // about as many Hangul letters as the ja/zh model saw characters.
+            val covered = allLines.count { line -> koreanLines.any { k -> overlap(line, k.box) > 0.4f } }
+            val hangulChars = koreanLines.filter { k -> overlap(r, k.box) > 0.3f }.sumOf { it.hangul }
+            val cjkChars = s.count { it.isLetter() }
+            if (allLines.isNotEmpty() && covered * 2 > allLines.size && hangulChars * 10 >= cjkChars * 7) { korean++; continue }
+            // All lines are erased when drawing (even ones the Korean model misread).
+            val lineRects = allLines.ifEmpty { listOf(r) }
             // Vertical (tategaki) when most lines are tall narrow columns.
             val tall = lineRects.count { it.height() > it.width() * 1.6 }
             val vertical = s.replace("\n", "").length >= 2 && tall * 2 > lineRects.size
