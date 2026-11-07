@@ -29,9 +29,9 @@ Respond with JSON only, matching this shape exactly:
         sb.append("Source language: ").append(lang).append('\n')
         if (req.history.isNotEmpty()) {
             sb.append("\nPrevious screens for context (source => Korean):\n")
-            for ((src, ko) in req.history.takeLast(3)) {
-                sb.append("- ").append(src.take(300).replace('\n', ' ')).append(" => ")
-                    .append(ko.take(300).replace('\n', ' ')).append('\n')
+            for ((src, ko) in req.history.takeLast(2)) {
+                sb.append("- ").append(src.take(160).replace('\n', ' ')).append(" => ")
+                    .append(ko.take(160).replace('\n', ' ')).append('\n')
             }
         }
         sb.append("\nBlocks to translate:\n")

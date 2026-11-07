@@ -94,7 +94,7 @@ class GeminiEngine(
     private fun call(url: String, key: String, base: JSONObject, withThinkingConfig: Boolean): Pair<Int, String> {
         val gen = JSONObject()
             .put("temperature", 0.2)
-            .put("maxOutputTokens", 2048)
+            .put("maxOutputTokens", 1024)
         if (!isGemma) {
             gen.put("responseMimeType", "application/json")
             // Schema-constrained output: the model cannot emit malformed JSON.

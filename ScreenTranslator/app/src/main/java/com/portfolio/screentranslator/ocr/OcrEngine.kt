@@ -35,7 +35,10 @@ class OcrEngine {
 
     suspend fun recognise(bitmap: Bitmap, sourceLang: String): Result = coroutineScope {
         val image = InputImage.fromBitmap(bitmap, 0)
-        val ko = async { korean.process(image).await() }
+        // Korean pass only decides "is this already Korean?" - half resolution is plenty and
+        // roughly halves its latency, which otherwise dominates the parallel OCR step.
+        val small = Bitmap.createScaledBitmap(bitmap, bitmap.width / 2, bitmap.height / 2, true)
+        val ko = async { try { korean.process(InputImage.fromBitmap(small, 0)).await() } finally { small.recycle() } }
         val text: Text = when (sourceLang) {
             "ja" -> japanese.process(image).await()
             "zh" -> chinese.process(image).await()
@@ -50,7 +53,9 @@ class OcrEngine {
         // Lines the Korean model reads as Hangul, with how many Hangul letters each holds.
         val koreanLines = ko.await().textBlocks.flatMap { it.lines }
             .filter { isMostlyHangul(it.text) && it.text.count { c -> c.code in 0xAC00..0xD7A3 } >= 2 }
-            .mapNotNull { l -> l.boundingBox?.let { KoLine(it, l.text.count { c -> c.code in 0xAC00..0xD7A3 }) } }
+            .mapNotNull { l -> l.boundingBox?.let { b ->
+                KoLine(Rect(b.left * 2, b.top * 2, b.right * 2, b.bottom * 2), l.text.count { c -> c.code in 0xAC00..0xD7A3 })
+            } }
         toBlocks(text, bitmap.width, bitmap.height, koreanLines, sourceLang)
     }
 
