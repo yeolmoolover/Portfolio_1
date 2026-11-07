@@ -81,7 +81,7 @@ class GeminiEngine(
         val request = Request.Builder()
             .url("$base:streamGenerateContent?alt=sse")
             .header("x-goog-api-key", key)
-            .post(buildBody(body, withThinkingConfig).toString().toRequestBody("application/json".toMediaType()))
+            .post(buildBody(body, withThinkingConfig, withSchema = false).toString().toRequestBody("application/json".toMediaType()))
             .build()
         http.newCall(request).execute().use { resp ->
             if (!resp.isSuccessful) return StreamResult(resp.code, "", resp.body?.string() ?: "")
@@ -110,13 +110,15 @@ class GeminiEngine(
         }
     }.getOrDefault(payload.replace('\n', ' ')).take(220)
 
-    private fun buildBody(base: JSONObject, withThinkingConfig: Boolean): JSONObject {
+    private fun buildBody(base: JSONObject, withThinkingConfig: Boolean, withSchema: Boolean = true): JSONObject {
         val gen = JSONObject()
             .put("temperature", 0.2)
             .put("maxOutputTokens", 1024)
-        if (!isGemma) {
-            gen.put("responseMimeType", "application/json")
-            // Schema-constrained output: the model cannot emit malformed JSON.
+        if (!isGemma) gen.put("responseMimeType", "application/json")
+        if (!isGemma && withSchema) {
+            // Schema-constrained output: the model cannot emit malformed JSON. Used only for the
+            // non-streaming retry: with streaming, the schema path buffers the whole reply and
+            // sends it at the end (measured: 1.7 s -> 11.7 s, nothing arrives early).
             gen.put("responseSchema", JSONObject()
                 .put("type", "OBJECT")
                 .put("properties", JSONObject()
