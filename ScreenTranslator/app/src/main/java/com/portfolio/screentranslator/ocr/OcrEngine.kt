@@ -108,9 +108,11 @@ class OcrEngine {
             if (allLines.isNotEmpty() && foreignLines.size * 2 <= allLines.size) { korean++; continue }
             // Mostly foreign block with a few Korean lines: keep it, paint only the foreign lines.
             val lineRects = foreignLines.ifEmpty { listOf(r) }
-            val lineHeight = lineRects.map { it.height() }.sorted().let { it[it.size / 2] }
-            val vertical = block.lines.size >= 2 && r.height() > r.width() * 1.8 &&
-                lineRects.all { it.width() <= it.height() * 1.5 }
+            // Vertical (tategaki) when most lines are tall narrow columns.
+            val tall = lineRects.count { it.height() > it.width() * 1.6 }
+            val vertical = s.replace("\n", "").length >= 2 && tall * 2 > lineRects.size
+            val glyph = lineRects.map { if (vertical) it.width() else it.height() }.sorted()
+            val lineHeight = glyph[glyph.size / 2]
             out += SourceBlock(id++, s, r, vertical, lineRects, lineHeight)
         }
         return Result(out, korean)

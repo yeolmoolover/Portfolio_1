@@ -15,7 +15,7 @@ Rules:
 - Translate each block as a whole; blocks are separate speech bubbles or UI elements, so keep them separate.
 - Keep the register: casual speech stays casual (반말), polite stays polite (존댓말). Keep character names consistent with the history.
 - OCR output may contain mistakes (wrong kana/kanji, split or merged lines). Infer the intended text from context before translating.
-- If a block is clearly not translatable text (random symbols, garbage from a drawing), return an empty string for it.
+- EVERY block id in the input MUST appear in "blocks" with a non-empty "ko". Never skip or merge ids. Only if a block is clearly not text at all (random symbols from a drawing) return an empty string for it.
 - When a screenshot is provided: (1) use it to fix OCR mistakes, (2) find onomatopoeia / sound effects drawn in the artwork that the OCR missed and add them as "sfx" entries with their approximate position, (3) keep SFX translations very short (e.g. 쾅, 두근, 스윽).
 Respond with JSON only, matching this shape exactly:
 {"blocks":[{"id":1,"ko":"..."}],"sfx":[{"ko":"...","box":[x,y,w,h]}]}

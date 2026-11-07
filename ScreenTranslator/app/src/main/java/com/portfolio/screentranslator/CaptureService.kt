@@ -320,7 +320,9 @@ class CaptureService : Service() {
             topBar?.setShowingOriginal(false)
             val status = buildString {
                 append(if (cachedHit) "저장된 번역" else result.engineUsed)
-                append(" · ").append(drawn.size).append("개 블록")
+                append(" · ").append(drawn.count { !it.isSfx }).append("/").append(blocks.size).append("개 블록")
+                val missing = blocks.size - drawn.count { !it.isSfx }
+                if (missing > 0) append(" (").append(missing).append("개 누락)")
                 append(" · 인식 ").append(tOcr).append("ms · 번역 ").append(tApi).append("ms")
                 if (comic) append(" (만화 모드: 스크린샷 포함)")
                 chain.lastError?.let { append("\n대체됨: ").append(it) }
@@ -388,7 +390,19 @@ class CaptureService : Service() {
             } else {
                 val src = byId[t.sourceId] ?: continue
                 val (bg, fg) = ImageUtil.sampleColors(bmp, src.box)
-                out += TranslatedBlock(src.id, t.text, Rect(src.box), false, bg, fg, src.lines.map { Rect(it) }, src.lineHeight)
+                if (src.vertical) {
+                    // Write the translation horizontally, centred on the original columns:
+                    // width ~ the column height (what a bubble usually allows), clamped to the screen.
+                    val cx = src.box.centerX(); val cy = src.box.centerY()
+                    val w = maxOf(src.box.width(), (src.box.height() * 1.1f).toInt())
+                        .coerceAtMost((bmp.width * 0.8f).toInt())
+                    val h = src.box.height()
+                    val hbox = Rect(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
+                    hbox.offset((-hbox.left).coerceAtLeast(0) + (bmp.width - hbox.right).coerceAtMost(0), 0)
+                    out += TranslatedBlock(src.id, t.text, hbox, false, bg, fg, src.lines.map { Rect(it) }, src.lineHeight, vertical = true)
+                } else {
+                    out += TranslatedBlock(src.id, t.text, Rect(src.box), false, bg, fg, src.lines.map { Rect(it) }, src.lineHeight)
+                }
             }
         }
         return out

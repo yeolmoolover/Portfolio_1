@@ -26,6 +26,9 @@ data class TranslatedBlock(
     val fgColor: Int,
     val lines: List<Rect> = listOf(box),
     val lineHeight: Int = box.height(),
+    /** Source was vertical (Japanese manga). `lines` are the original columns to erase;
+     *  `box` is the horizontal area where the translation is written instead. */
+    val vertical: Boolean = false,
 )
 
 data class TranslationRequest(

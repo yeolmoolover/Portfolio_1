@@ -47,23 +47,39 @@ class OverlayView(context: Context) : View(context) {
     private fun drawBlock(canvas: Canvas, b: TranslatedBlock) {
         boxPaint.color = b.bgColor
         boxPaint.style = Paint.Style.FILL
-        val padX = 4 * density
-        // Vertical padding closes the gap between consecutive lines so the box reads as one,
-        // and covers the anti-aliased edges of the original glyphs.
-        val padY = max(3 * density, b.lineHeight * 0.3f)
-        for (line in b.lines) {
-            val r = RectF(line).apply { inset(-padX, -padY) }
-            canvas.drawRoundRect(r, 3 * density, 3 * density, boxPaint)
+        // Padding proportional to the glyph size: ML Kit boxes hug the glyphs, so without it the
+        // anti-aliased edges and descenders of the original text stay visible.
+        val pad = max(4 * density, b.lineHeight * 0.4f)
+        val sorted = if (b.vertical) b.lines.sortedBy { it.left } else b.lines.sortedBy { it.top }
+        for (line in sorted) {
+            canvas.drawRoundRect(RectF(line).apply { inset(-pad, -pad) }, 3 * density, 3 * density, boxPaint)
+        }
+        // Fill the gap between consecutive lines / columns so nothing peeks through in between.
+        for (i in 0 until sorted.size - 1) {
+            val a = sorted[i]; val c = sorted[i + 1]
+            val gap = if (b.vertical) RectF(a.left.toFloat(), min(a.top, c.top).toFloat(), c.right.toFloat(), max(a.bottom, c.bottom).toFloat())
+                      else RectF(min(a.left, c.left).toFloat(), a.top.toFloat(), max(a.right, c.right).toFloat(), c.bottom.toFloat())
+            if ((b.vertical && c.left - a.right < b.lineHeight * 1.5f) || (!b.vertical && c.top - a.bottom < b.lineHeight * 1.5f))
+                canvas.drawRect(gap.apply { inset(-pad * 0.5f, -pad * 0.5f) }, boxPaint)
         }
 
         textPaint.color = b.fgColor
-        textPaint.isFakeBoldText = false
+        textPaint.isFakeBoldText = true   // thin Korean glyphs over artwork are hard to read
         val scaled = resources.displayMetrics.scaledDensity
-        // Start at the original glyph size (line height ~ 1.2 x font size), then shrink to fit.
-        val startSp = (b.lineHeight / scaled / 1.2f * fontScale).coerceIn(8f, 40f)
-        val layout = fitText(b.text, textPaint, b.box, minSp = 7f, startSp = startSp) ?: return
-        canvas.save()
+        // Start at the original glyph size: for horizontal text the line height is ~1.2x the
+        // font size; for vertical columns the column width *is* the glyph size.
+        val glyphSp = b.lineHeight / scaled / (if (b.vertical) 1.0f else 1.2f)
+        val startSp = (glyphSp * fontScale).coerceIn(10f, 44f)
+        val layout = fitText(b.text, textPaint, b.box, minSp = 9f, startSp = startSp) ?: return
         val dy = b.box.top + max(0f, (b.box.height() - layout.height) / 2f)
+        if (b.vertical) {
+            // Horizontal replacement for vertical text: an opaque panel just big enough for it.
+            val textW = (0 until layout.lineCount).maxOf { layout.getLineWidth(it) }
+            val left = b.box.left + (b.box.width() - textW) / 2f
+            val panel = RectF(left - pad, dy - pad * 0.6f, left + textW + pad, dy + layout.height + pad * 0.6f)
+            canvas.drawRoundRect(panel, 4 * density, 4 * density, boxPaint)
+        }
+        canvas.save()
         canvas.translate(b.box.left.toFloat(), dy)
         layout.draw(canvas)
         canvas.restore()
