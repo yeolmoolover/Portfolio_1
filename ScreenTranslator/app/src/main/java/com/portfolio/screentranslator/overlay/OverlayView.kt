@@ -47,7 +47,8 @@ class OverlayView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         for (b in blocks) {
-            if (b.isSfx) drawSfx(canvas, b) else drawBlock(canvas, b)
+            try { if (b.isSfx) drawSfx(canvas, b) else drawBlock(canvas, b) }
+            catch (e: Throwable) { android.util.Log.w("OverlayView", "draw failed", e) }
         }
     }
 
@@ -100,7 +101,7 @@ class OverlayView(context: Context) : View(context) {
         val dy = b.box.top + max(0f, (b.box.height() - layout.height) / 2f)
         if (b.vertical && !outlineStyle) {
             // Horizontal replacement for vertical text: an opaque panel just big enough for it.
-            val textW = (0 until layout.lineCount).maxOf { layout.getLineWidth(it) }
+            val textW = (0 until layout.lineCount).maxOfOrNull { layout.getLineWidth(it) } ?: 0f
             val left = b.box.left + (b.box.width() - textW) / 2f
             val panel = RectF(left - pad, dy - pad * 0.6f, left + textW + pad, dy + layout.height + pad * 0.6f)
             canvas.drawRoundRect(panel, 4 * density, 4 * density, boxPaint)

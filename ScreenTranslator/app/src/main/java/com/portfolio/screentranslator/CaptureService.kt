@@ -42,6 +42,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Foreground service that owns the MediaProjection, watches the screen for changes,
@@ -117,7 +118,12 @@ class CaptureService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_STOP -> { stopSelf(); return START_NOT_STICKY }
+            ACTION_STOP -> {
+                stopSelf()
+                // If something is wedged, make sure the bar and capture still go away.
+                main.postDelayed({ if (running) { runCatching { onDestroy() }; android.os.Process.killProcess(android.os.Process.myPid()) } }, 1500)
+                return START_NOT_STICKY
+            }
             ACTION_START -> {
                 startForeground(NOTIF_ID, buildNotification(getString(R.string.notif_text)))
                 val code = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
@@ -299,7 +305,7 @@ class CaptureService : Service() {
             val blocks = mergeOverlapping(
                 ocrResult.blocks.filter { it.box.bottom > topInset + 4 }
                     .filter { barRect == null || !Rect.intersects(it.box, barRect) }
-                    .map { b -> if (b.vertical) refineVertical(bmp, b) else b }
+                    .map { b -> if (b.vertical) refineVerticalSafe(bmp, b) else b }
             )
             lastSource = blocks
             lastBitmap?.recycle(); lastBitmap = bmp
@@ -333,9 +339,11 @@ class CaptureService : Service() {
             }
             setStatus(status)
             showOverlay(drawn)
-        } catch (e: Exception) {
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
             Log.w(TAG, "translate failed", e)
-            setStatus("실패: ${e.message}")
+            setStatus("실패: ${e.javaClass.simpleName}: ${e.message}")
             lastTranslatedFp = fp   // don't retry the same frame in a loop
         } finally {
             busy = false
@@ -379,6 +387,12 @@ class CaptureService : Service() {
             }
         }
     }
+
+    /** [refineVertical] with a hard time limit; falls back to the raw block on any problem. */
+    private suspend fun refineVerticalSafe(bmp: Bitmap, b: SourceBlock): SourceBlock =
+        withTimeoutOrNull(1500) {
+            withContext(Dispatchers.Default) { runCatching { refineVertical(bmp, b) }.getOrDefault(b) }
+        } ?: b
 
     /** Replace ML Kit's near-zero-width vertical boxes with the measured ink extent. */
     private fun refineVertical(bmp: Bitmap, b: SourceBlock): SourceBlock {
@@ -468,16 +482,24 @@ class CaptureService : Service() {
 
     // ---------------------------------------------------------------- user actions
 
+    private var translateStartedAt = 0L
+
     private fun translateNow() {
         val now = System.currentTimeMillis()
         if (now - lastTriggerAt < 500) return
         lastTriggerAt = now
-        if (translateJob?.isActive == true) { setStatus("번역 중…"); return }
+        if (translateJob?.isActive == true) {
+            if (now - translateStartedAt < 20_000) { setStatus("번역 중…"); return }
+            translateJob?.cancel()                  // stuck: drop it and start fresh
+            setStatus("이전 번역이 20초를 넘겨 취소했습니다")
+        }
+        translateStartedAt = now
         showingOriginal = false
         topBar?.setShowingOriginal(false)
         translateJob = scope.launch {
             val bmp = grabFrame() ?: run { setStatus("화면을 캡처하지 못했습니다"); return@launch }
-            translateBitmap(bmp, ImageUtil.fingerprint(bmp))
+            val done = withTimeoutOrNull(25_000) { translateBitmap(bmp, ImageUtil.fingerprint(bmp)) }
+            if (done == null) { busy = false; topBar?.setBusy(false); setStatus("번역이 25초를 넘겨 중단했습니다 (네트워크/엔진 확인)") }
         }
     }
 
