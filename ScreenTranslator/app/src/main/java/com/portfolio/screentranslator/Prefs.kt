@@ -47,9 +47,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("comic_mode", true)
         set(v) = sp.edit().putBoolean("comic_mode", v).apply()
 
+    /** Auto mode re-translates whenever the screen settles. Off by default: the normal flow
+     *  is volume-down -> translate, touch -> dismiss, volume-down again on the next page. */
     var autoMode: Boolean
-        get() = sp.getBoolean("auto_mode", true)
-        set(v) = sp.edit().putBoolean("auto_mode", v).apply()
+        get() = sp.getBoolean("auto_mode2", false)
+        set(v) = sp.edit().putBoolean("auto_mode2", v).apply()
 
     /**
      * 0.3 .. 1.0. Boxes are separate small windows, so above 0.8 only touches landing

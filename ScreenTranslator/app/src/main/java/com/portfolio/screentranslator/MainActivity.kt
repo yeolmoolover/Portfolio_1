@@ -106,7 +106,11 @@ class MainActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
             val mpm = getSystemService(MediaProjectionManager::class.java)
-            projectionLauncher.launch(mpm.createScreenCaptureIntent())
+            // Android 14+: ask for the whole screen only (no "single app" picker in the dialog).
+            val captureIntent = if (Build.VERSION.SDK_INT >= 34)
+                mpm.createScreenCaptureIntent(android.media.projection.MediaProjectionConfig.createConfigForDefaultDisplay())
+            else mpm.createScreenCaptureIntent()
+            projectionLauncher.launch(captureIntent)
         }
         findViewById<MaterialButton>(R.id.btn_stop).setOnClickListener {
             startService(Intent(this, CaptureService::class.java).setAction(CaptureService.ACTION_STOP))

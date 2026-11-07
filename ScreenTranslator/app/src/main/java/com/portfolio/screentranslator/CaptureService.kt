@@ -5,7 +5,10 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
@@ -19,7 +22,11 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.media.AudioManager
 import android.util.Log
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
 import com.portfolio.screentranslator.ocr.OcrEngine
@@ -70,6 +77,8 @@ class CaptureService : Service() {
         private const val NOTIF_ID = 1
         private const val TAG = "CaptureService"
         @Volatile var running = false
+        /** Set by [KeyTriggerService] when it consumed a volume key (avoids double triggers). */
+        @Volatile var lastKeyHandledAt = 0L
     }
 
     private lateinit var prefs: Prefs
@@ -101,6 +110,11 @@ class CaptureService : Service() {
     private var lastSource: List<SourceBlock> = emptyList()
     private var lastBitmap: Bitmap? = null
     private var busy = false
+    /** 1x1 window that only exists to receive ACTION_OUTSIDE = "user touched the screen". */
+    private var touchWatcher: View? = null
+    private var overlayShownAt = 0L
+    private var lastTriggerAt = 0L
+    private var volumeReceiver: BroadcastReceiver? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -198,9 +212,77 @@ class CaptureService : Service() {
         // Per-block windows: boxes can be fully opaque while touches outside them pass through.
         overlay = OverlayLayer(this, wm, alpha = prefs.opacity, fontScale = prefs.fontScale)
         compare = CompareView(this, wm)
+        installTouchWatcher()
+        installVolumeReceiver()
         running = true
         setStatus(if (prefs.autoMode) "자동 모드: 화면이 멈추면 번역합니다" else "음량 아래 버튼 / 알림의 '번역'으로 번역")
         startWatching()
+    }
+
+    // ---------------------------------------------------------------- touch / volume hooks
+
+    /**
+     * Any touch outside this (invisible, 1 px) window arrives as ACTION_OUTSIDE. In manual
+     * mode that dismisses the current translation; the next volume press translates again.
+     */
+    private fun installTouchWatcher() {
+        val v = View(this)
+        v.setOnTouchListener { _, ev ->
+            if (ev.actionMasked == MotionEvent.ACTION_OUTSIDE) onUserTouchedScreen()
+            false
+        }
+        val lp = WindowManager.LayoutParams(
+            1, 1,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT,
+        ).apply { gravity = Gravity.TOP or Gravity.START; x = 0; y = 0; alpha = 0f }
+        runCatching { wm.addView(v, lp); touchWatcher = v }
+    }
+
+    private fun onUserTouchedScreen() {
+        if (prefs.autoMode || showingOriginal) return
+        if (currentBlocks.isEmpty()) return
+        if (System.currentTimeMillis() - overlayShownAt < 400) return   // the tap that triggered us
+        dismiss()
+    }
+
+    /** Hide the translation and forget the screen so nothing re-translates until asked. */
+    private fun dismiss() {
+        currentBlocks = emptyList()
+        lastTranslatedFp = null; lastTranslatedFpWithOverlay = null
+        overlayHiddenForMotion = false
+        main.post { overlay?.blocks = emptyList() }
+    }
+
+    /**
+     * Volume changes while running are undone immediately (the keys are translation
+     * shortcuts now). If the accessibility service did not already handle the key, the
+     * change itself is used as the trigger - so volume keys work even without it.
+     */
+    private fun installVolumeReceiver() {
+        val r = object : BroadcastReceiver() {
+            override fun onReceive(c: Context?, intent: Intent?) {
+                if (!prefs.volumeTrigger || intent == null) return
+                val stream = intent.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", -1)
+                val now = intent.getIntExtra("android.media.EXTRA_VOLUME_STREAM_VALUE", -1)
+                val prev = intent.getIntExtra("android.media.EXTRA_PREV_VOLUME_STREAM_VALUE", -1)
+                if (stream < 0 || now < 0 || prev < 0 || now == prev) return
+                val am = getSystemService(AudioManager::class.java)
+                runCatching { am.setStreamVolume(stream, prev, 0) }
+                if (System.currentTimeMillis() - lastKeyHandledAt < 1000) return   // key already handled
+                if (now < prev) translateNow() else toggleOriginal()
+            }
+        }
+        // Protected system broadcast; the export flag is required on API 34+ for context receivers.
+        androidx.core.content.ContextCompat.registerReceiver(
+            this, r, IntentFilter("android.media.VOLUME_CHANGED_ACTION"),
+            androidx.core.content.ContextCompat.RECEIVER_EXPORTED,
+        )
+        volumeReceiver = r
     }
 
     // ---------------------------------------------------------------- capture loop
@@ -215,7 +297,17 @@ class CaptureService : Service() {
         watchJob = scope.launch {
             while (isActive) {
                 delay(250)
-                if (!prefs.autoMode || showingOriginal) continue
+                if (showingOriginal) continue
+                if (!prefs.autoMode) {
+                    // Manual mode: only watch for scrolling, which dismisses the translation.
+                    if (currentBlocks.isEmpty()) continue
+                    val bmp = grabFrame() ?: continue
+                    val fp = ImageUtil.fingerprint(bmp)
+                    bmp.recycle()
+                    if (lastTranslatedFpWithOverlay != null && ImageUtil.diff(lastTranslatedFpWithOverlay, fp) > 6 &&
+                        System.currentTimeMillis() - overlayShownAt > 600) dismiss()
+                    continue
+                }
                 val bmp = grabFrame() ?: continue
                 val fp = ImageUtil.fingerprint(bmp)
                 val moving = ImageUtil.diff(lastFrameFp, fp) > 6
@@ -301,6 +393,7 @@ class CaptureService : Service() {
         lastTranslatedFpWithOverlay = fp
         lastFrameFp = fp
         stableSince = System.currentTimeMillis()
+        overlayShownAt = stableSince
     }
 
     private fun statusBarHeight(): Int = try {
@@ -353,6 +446,9 @@ class CaptureService : Service() {
     // ---------------------------------------------------------------- user actions
 
     private fun translateNow() {
+        val now = System.currentTimeMillis()
+        if (now - lastTriggerAt < 700) return          // same press seen twice (key + volume change)
+        lastTriggerAt = now
         if (translateJob?.isActive == true) { setStatus("번역 중…"); return }
         showingOriginal = false
         translateJob = scope.launch {
@@ -362,6 +458,10 @@ class CaptureService : Service() {
     }
 
     private fun toggleOriginal() {
+        val now = System.currentTimeMillis()
+        if (now - lastTriggerAt < 700) return
+        lastTriggerAt = now
+        if (currentBlocks.isEmpty()) { translateNow(); return }   // nothing to toggle: translate instead
         showingOriginal = !showingOriginal
         if (showingOriginal) {
             main.post { overlay?.blocks = emptyList() }
@@ -407,6 +507,8 @@ class CaptureService : Service() {
         watchJob?.cancel(); translateJob?.cancel(); scope.cancel()
         compare?.hide()
         overlay?.destroy()
+        touchWatcher?.let { runCatching { wm.removeView(it) } }
+        volumeReceiver?.let { runCatching { unregisterReceiver(it) } }
         virtualDisplay?.release(); reader?.close(); projection?.stop()
         lastBitmap?.recycle()
         prefs.lastStatus = "중지됨"

@@ -32,6 +32,7 @@ class KeyTriggerService : AccessibilityService() {
         if (code != KeyEvent.KEYCODE_VOLUME_DOWN && code != KeyEvent.KEYCODE_VOLUME_UP) return false
 
         // Fire on the first DOWN; swallow auto-repeats and the UP so nothing reaches the system.
+        CaptureService.lastKeyHandledAt = System.currentTimeMillis()
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
             val action = if (code == KeyEvent.KEYCODE_VOLUME_DOWN) CaptureService.ACTION_TRANSLATE
                          else CaptureService.ACTION_TOGGLE_ORIGINAL
