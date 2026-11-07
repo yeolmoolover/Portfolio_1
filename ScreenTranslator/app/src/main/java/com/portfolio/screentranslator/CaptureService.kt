@@ -213,7 +213,7 @@ class CaptureService : Service() {
         )
         compare = CompareView(this, wm)
         topBar = TopBar(
-            this, wm, statusBarHeight(),
+            this, wm, statusBarHeight(), prefs.barReversed,
             onTranslate = { translateNow() },
             onToggleOriginal = { toggleOriginal() },
             onStop = { stopSelf() },

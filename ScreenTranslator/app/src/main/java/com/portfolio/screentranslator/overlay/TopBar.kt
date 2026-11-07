@@ -23,6 +23,7 @@ class TopBar(
     private val context: Context,
     private val wm: WindowManager,
     topInsetPx: Int,
+    reversed: Boolean,
     private val onTranslate: () -> Unit,
     private val onToggleOriginal: () -> Unit,
     private val onStop: () -> Unit,
@@ -42,11 +43,12 @@ class TopBar(
         root.background = GradientDrawable().apply { setColor(Color.argb(225, 28, 28, 28)) }
         root.setPadding(0, 0, 0, 0)
         fun weight(w: Float) = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, w)
-        root.addView(btnTranslate, weight(2f))
-        root.addView(divider())
-        root.addView(btnOriginal, weight(2f))
-        root.addView(divider())
-        root.addView(btnStop, weight(1f))
+        val order = if (reversed) listOf(btnStop to 1f, btnOriginal to 2f, btnTranslate to 2f)
+                    else listOf(btnTranslate to 2f, btnOriginal to 2f, btnStop to 1f)
+        order.forEachIndexed { i, (v, w) ->
+            if (i > 0) root.addView(divider())
+            root.addView(v, weight(w))
+        }
         btnTranslate.setOnClickListener { onTranslate() }
         btnOriginal.setOnClickListener { onToggleOriginal() }
         btnStop.setOnClickListener { onStop() }

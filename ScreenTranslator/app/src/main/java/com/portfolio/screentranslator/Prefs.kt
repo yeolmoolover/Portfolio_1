@@ -70,6 +70,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("debug_boxes", false)
         set(v) = sp.edit().putBoolean("debug_boxes", v).apply()
 
+    /** Top bar order: false = [번역 | 원문 보기 | ✕], true = [✕ | 원문 보기 | 번역]. */
+    var barReversed: Boolean
+        get() = sp.getBoolean("bar_reversed", false)
+        set(v) = sp.edit().putBoolean("bar_reversed", v).apply()
+
     var fontScale: Float
         get() = sp.getFloat("font_scale", 1.0f)
         set(v) = sp.edit().putFloat("font_scale", v.coerceIn(0.6f, 1.6f)).apply()

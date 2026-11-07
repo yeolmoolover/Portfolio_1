@@ -199,6 +199,12 @@
         </com.google.android.material.textfield.TextInputLayout>
 
         <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/bar_reversed"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/bar_reversed" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
             android:id="@+id/debug_boxes"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
