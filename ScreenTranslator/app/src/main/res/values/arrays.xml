@@ -7,6 +7,14 @@
         <item>gemini</item>
         <item>claude</item>
     </string-array>
+    <string-array name="text_styles">
+        <item>상자 (번역문 뒤에 배경색 패널)</item>
+        <item>외곽선 (패널 없이 글자에 두꺼운 테두리)</item>
+    </string-array>
+    <string-array name="text_style_values">
+        <item>box</item>
+        <item>outline</item>
+    </string-array>
     <string-array name="source_langs">
         <item>일본어만 번역</item>
         <item>중국어만 번역</item>

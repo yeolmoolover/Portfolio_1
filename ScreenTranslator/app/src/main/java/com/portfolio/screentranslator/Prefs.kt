@@ -58,6 +58,11 @@ class Prefs(context: Context) {
         get() = sp.getString("last_status", "") ?: ""
         set(v) = sp.edit().putString("last_status", v).apply()
 
+    /** box: opaque panel behind the translation. outline: no panel, thick halo around the glyphs. */
+    var textStyle: String
+        get() = sp.getString("text_style", "box") ?: "box"
+        set(v) = sp.edit().putString("text_style", v).apply()
+
     var fontScale: Float
         get() = sp.getFloat("font_scale", 1.0f)
         set(v) = sp.edit().putFloat("font_scale", v.coerceIn(0.6f, 1.6f)).apply()

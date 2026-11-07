@@ -23,6 +23,7 @@ class OverlayLayer(
     private val wm: WindowManager,
     private val alpha: Float,
     private val fontScale: Float,
+    private val outlineStyle: Boolean = false,
 ) {
     private val main = Handler(Looper.getMainLooper())
     private val views = ArrayList<OverlayView>()
@@ -47,6 +48,7 @@ class OverlayLayer(
         val shifted = b.copy(box = shift(b.box), lines = b.lines.map(::shift))
         val v = OverlayView(context).apply {
             fontScale = this@OverlayLayer.fontScale
+            outlineStyle = this@OverlayLayer.outlineStyle
             blocks = listOf(shifted)
         }
         val lp = WindowManager.LayoutParams(

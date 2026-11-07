@@ -29,6 +29,9 @@ class OverlayView(context: Context) : View(context) {
     var fontScale = 1f
         set(v) { field = v; invalidate() }
 
+    /** false = opaque panel behind the text, true = outline (halo) only. */
+    var outlineStyle = false
+
     private val boxPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
     private val strokePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -72,7 +75,7 @@ class OverlayView(context: Context) : View(context) {
         val startSp = (glyphSp * fontScale).coerceIn(10f, 44f)
         val layout = fitText(b.text, textPaint, b.box, minSp = 9f, startSp = startSp) ?: return
         val dy = b.box.top + max(0f, (b.box.height() - layout.height) / 2f)
-        if (b.vertical) {
+        if (b.vertical && !outlineStyle) {
             // Horizontal replacement for vertical text: an opaque panel just big enough for it.
             val textW = (0 until layout.lineCount).maxOf { layout.getLineWidth(it) }
             val left = b.box.left + (b.box.width() - textW) / 2f
@@ -81,6 +84,15 @@ class OverlayView(context: Context) : View(context) {
         }
         canvas.save()
         canvas.translate(b.box.left.toFloat(), dy)
+        if (outlineStyle) {
+            // Thick halo in the background colour hides whatever is directly under the glyphs.
+            strokePaint.textSize = textPaint.textSize
+            strokePaint.color = b.bgColor
+            strokePaint.strokeWidth = max(3 * density, textPaint.textSize * 0.22f)
+            strokePaint.isFakeBoldText = true
+            StaticLayout.Builder.obtain(b.text, 0, b.text.length, strokePaint, max(1, b.box.width()))
+                .setAlignment(Layout.Alignment.ALIGN_CENTER).setIncludePad(false).build().draw(canvas)
+        }
         layout.draw(canvas)
         canvas.restore()
     }
@@ -92,6 +104,7 @@ class OverlayView(context: Context) : View(context) {
             ?: return
         strokePaint.textSize = textPaint.textSize
         strokePaint.color = Color.BLACK
+        strokePaint.strokeWidth = 4f
         strokePaint.isFakeBoldText = true
         val stroke = StaticLayout.Builder.obtain(b.text, 0, b.text.length, strokePaint, max(1, b.box.width()))
             .setAlignment(Layout.Alignment.ALIGN_CENTER).build()

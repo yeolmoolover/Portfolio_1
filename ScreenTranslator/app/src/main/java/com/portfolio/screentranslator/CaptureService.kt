@@ -200,7 +200,7 @@ class CaptureService : Service() {
         )
 
         // Per-block windows: boxes can be fully opaque while touches outside them pass through.
-        overlay = OverlayLayer(this, wm, alpha = 1f, fontScale = prefs.fontScale)
+        overlay = OverlayLayer(this, wm, alpha = 1f, fontScale = prefs.fontScale, outlineStyle = prefs.textStyle == "outline")
         compare = CompareView(this, wm)
         topBar = TopBar(
             this, wm, statusBarHeight(),

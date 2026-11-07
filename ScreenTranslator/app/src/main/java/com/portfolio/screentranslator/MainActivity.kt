@@ -70,6 +70,12 @@ class MainActivity : AppCompatActivity() {
             setAdapter(ArrayAdapter(context, android.R.layout.simple_list_item_1, langLabels))
             setText(langLabels[langValues.indexOf(prefs.sourceLang).coerceAtLeast(0)], false)
         }
+        val styleValues = resources.getStringArray(R.array.text_style_values)
+        val styleLabels = resources.getStringArray(R.array.text_styles)
+        val style = findViewById<MaterialAutoCompleteTextView>(R.id.text_style).apply {
+            setAdapter(ArrayAdapter(context, android.R.layout.simple_list_item_1, styleLabels))
+            setText(styleLabels[styleValues.indexOf(prefs.textStyle).coerceAtLeast(0)], false)
+        }
         val comic = findViewById<SwitchMaterial>(R.id.comic_mode).apply { isChecked = prefs.comicMode }
         val auto = findViewById<SwitchMaterial>(R.id.auto_mode).apply { isChecked = prefs.autoMode }
         val fontScale = findViewById<Slider>(R.id.font_scale).apply { value = prefs.fontScale }
@@ -83,6 +89,7 @@ class MainActivity : AppCompatActivity() {
             prefs.primaryEngine = engineValues[engineLabels.indexOf(engine.text.toString()).coerceAtLeast(0)]
             prefs.sourceLang = langValues[langLabels.indexOf(lang.text.toString()).coerceAtLeast(0)]
             prefs.comicMode = comic.isChecked
+            prefs.textStyle = styleValues[styleLabels.indexOf(style.text.toString()).coerceAtLeast(0)]
             prefs.autoMode = auto.isChecked
             prefs.fontScale = fontScale.value
         }
