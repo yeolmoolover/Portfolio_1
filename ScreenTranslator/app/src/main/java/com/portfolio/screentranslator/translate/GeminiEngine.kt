@@ -28,7 +28,7 @@ class GeminiEngine(
 
     private val http = OkHttpClient.Builder()
         .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(if (isGemma) 25 else 40, TimeUnit.SECONDS)
         .build()
 
     override suspend fun translate(req: TranslationRequest): TranslationResult = withContext(Dispatchers.IO) {
@@ -70,7 +70,18 @@ class GeminiEngine(
             if (p.optBoolean("thought", false)) continue
             sb.append(p.optString("text", ""))
         }
-        TranslationResult(PromptBuilder.parse(sb.toString()), name)
+        try {
+            TranslationResult(PromptBuilder.parse(sb.toString()), name)
+        } catch (e: Exception) {
+            // Malformed reply: one retry before giving up on this engine.
+            val (code2, payload2) = call(url, key, body, withThinkingConfig = !isGemma)
+            if (code2 !in 200..299) throw EngineUnavailableException("$name 재시도 HTTP $code2: ${errorMessage(payload2)}")
+            val text2 = JSONObject(payload2).optJSONArray("candidates")?.optJSONObject(0)
+                ?.optJSONObject("content")?.optJSONArray("parts")?.let { parts ->
+                    buildString { for (i in 0 until parts.length()) { val p = parts.optJSONObject(i) ?: continue; if (!p.optBoolean("thought", false)) append(p.optString("text", "")) } }
+                } ?: ""
+            TranslationResult(PromptBuilder.parse(text2), name)
+        }
     }
 
     private fun errorMessage(payload: String): String = runCatching {
@@ -84,7 +95,26 @@ class GeminiEngine(
         val gen = JSONObject()
             .put("temperature", 0.2)
             .put("maxOutputTokens", 2048)
-        if (!isGemma) gen.put("responseMimeType", "application/json")
+        if (!isGemma) {
+            gen.put("responseMimeType", "application/json")
+            // Schema-constrained output: the model cannot emit malformed JSON.
+            gen.put("responseSchema", JSONObject()
+                .put("type", "OBJECT")
+                .put("properties", JSONObject()
+                    .put("blocks", JSONObject().put("type", "ARRAY").put("items", JSONObject()
+                        .put("type", "OBJECT")
+                        .put("properties", JSONObject()
+                            .put("id", JSONObject().put("type", "INTEGER"))
+                            .put("ko", JSONObject().put("type", "STRING")))
+                        .put("required", JSONArray().put("id").put("ko"))))
+                    .put("sfx", JSONObject().put("type", "ARRAY").put("items", JSONObject()
+                        .put("type", "OBJECT")
+                        .put("properties", JSONObject()
+                            .put("ko", JSONObject().put("type", "STRING"))
+                            .put("box", JSONObject().put("type", "ARRAY").put("items", JSONObject().put("type", "NUMBER"))))
+                        .put("required", JSONArray().put("ko").put("box")))))
+                .put("required", JSONArray().put("blocks")))
+        }
         if (withThinkingConfig) {
             // Gemini 3.x: thinking cannot be turned off; "minimal" is the cheapest level.
             // Gemini 2.5: thinkingBudget 0 turns it off. (thinkingBudget is rejected by 3.x.)

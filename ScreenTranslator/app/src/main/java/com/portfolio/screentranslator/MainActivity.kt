@@ -85,7 +85,7 @@ class MainActivity : AppCompatActivity() {
             prefs.geminiKey = geminiKey.text.toString()
             prefs.claudeKey = claudeKey.text.toString()
             prefs.geminiModel = geminiModel.text.toString().ifBlank { "gemini-3.5-flash-lite" }
-            prefs.gemmaModel = gemmaModel.text.toString().ifBlank { "gemma-4-31b-it" }
+            prefs.gemmaModel = gemmaModel.text.toString().ifBlank { "gemma-4-26b-a4b-it" }
             prefs.claudeModel = claudeModel.text.toString().ifBlank { "claude-haiku-5-5" }
             prefs.primaryEngine = engineValues[engineLabels.indexOf(engine.text.toString()).coerceAtLeast(0)]
             prefs.sourceLang = langValues[langLabels.indexOf(lang.text.toString()).coerceAtLeast(0)]

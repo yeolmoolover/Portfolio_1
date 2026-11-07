@@ -48,6 +48,73 @@ object ImageUtil {
         return sum / a.size
     }
 
+    /** Result of [refineVerticalText]: true text area, one rect per column, glyph size. */
+    class InkRegion(val box: Rect, val columns: List<Rect>, val glyph: Int)
+
+    /**
+     * ML Kit reports vertical CJK text with (almost) zero-width boxes. Starting from that hint,
+     * measure where the ink really is: expand left/right over columns that contain dark pixels
+     * (allowing gaps smaller than a glyph), then top/bottom the same way. Works on the plain
+     * background of a speech bubble; returns null when nothing dark is found.
+     */
+    fun refineVerticalText(bmp: Bitmap, hint: Rect, bgLum: Int): InkRegion? {
+        val w = bmp.width; val h = bmp.height
+        val cx = hint.centerX().coerceIn(0, w - 1)
+        val span = maxOf(hint.height(), 80)
+        val x0 = (cx - span).coerceAtLeast(0); val x1 = (cx + span).coerceAtMost(w - 1)
+        val y0 = (hint.top - hint.height() / 3).coerceAtLeast(0)
+        val y1 = (hint.bottom + hint.height() / 3).coerceAtMost(h - 1)
+        if (x1 - x0 < 4 || y1 - y0 < 4) return null
+        val rw = x1 - x0 + 1; val rh = y1 - y0 + 1
+        val px = IntArray(rw * rh)
+        bmp.getPixels(px, 0, rw, x0, y0, rw, rh)
+        val thr = bgLum - 70
+        val ink = BooleanArray(rw * rh) { luminance(px[it]) < thr }
+
+        // column profile over the hinted vertical range
+        val hy0 = (hint.top - y0).coerceIn(0, rh - 1); val hy1 = (hint.bottom - y0).coerceIn(0, rh - 1)
+        val colInk = IntArray(rw) { x -> var c = 0; for (y in hy0..hy1) if (ink[y * rw + x]) c++; c }
+        val cxr = cx - x0
+        // find the central run (seed) - allow a tiny search around the hint centre
+        var seed = -1
+        for (d in 0..maxOf(4, hint.width())) {
+            if (cxr + d < rw && colInk[cxr + d] > 0) { seed = cxr + d; break }
+            if (cxr - d >= 0 && colInk[cxr - d] > 0) { seed = cxr - d; break }
+        }
+        if (seed < 0) return null
+        fun runAround(i: Int): IntRange { var a = i; var b = i; while (a > 0 && colInk[a - 1] > 0) a--; while (b < rw - 1 && colInk[b + 1] > 0) b++; return a..b }
+        val first = runAround(seed)
+        var glyph = maxOf(6, first.last - first.first + 1)
+        val maxGap = (glyph * 1.1f).toInt()
+        // expand left / right collecting column runs
+        val runs = ArrayList<IntRange>(); runs += first
+        var x = first.first - 1; var gap = 0
+        while (x >= 0) { if (colInk[x] > 0) { val r = runAround(x); runs.add(0, r); x = r.first - 1; gap = 0 } else { gap++; if (gap > maxGap) break; x-- } }
+        x = first.last + 1; gap = 0
+        while (x < rw) { if (colInk[x] > 0) { val r = runAround(x); runs.add(r); x = r.last + 1; gap = 0 } else { gap++; if (gap > maxGap) break; x++ } }
+        // merge runs narrower than a third of a glyph into neighbours (strokes of one column)
+        val merged = ArrayList<IntRange>()
+        for (r in runs) {
+            val last = merged.lastOrNull()
+            if (last != null && r.first - last.last - 1 < glyph * 0.45f) merged[merged.size - 1] = last.first..r.last else merged += r
+        }
+        val widths = merged.map { it.last - it.first + 1 }.sorted()
+        glyph = maxOf(glyph, widths[widths.size / 2])
+        val left = merged.first().first; val right = merged.last().last
+        // row profile over the found columns, expand up / down from the hint centre
+        val rowInk = IntArray(rh) { y -> var c = 0; for (xx in left..right) if (ink[y * rw + xx]) c++; c }
+        val cyr = ((hint.centerY() - y0).coerceIn(0, rh - 1))
+        var top = cyr; var bottom = cyr
+        var g = 0; var yy = cyr
+        while (yy >= 0) { if (rowInk[yy] > 0) { top = yy; g = 0 } else { g++; if (g > maxGap) break }; yy-- }
+        g = 0; yy = cyr
+        while (yy < rh) { if (rowInk[yy] > 0) { bottom = yy; g = 0 } else { g++; if (g > maxGap) break }; yy++ }
+        if (bottom - top < glyph) return null
+        val box = Rect(x0 + left, y0 + top, x0 + right + 1, y0 + bottom + 1)
+        val cols = merged.map { Rect(x0 + it.first, y0 + top, x0 + it.last + 1, y0 + bottom + 1) }
+        return InkRegion(box, cols, glyph)
+    }
+
     /**
      * Copy with boosted contrast for OCR only: scanlations often use thin light-grey type that
      * the recogniser misses or only partly detects. Mid greys are pushed towards black.

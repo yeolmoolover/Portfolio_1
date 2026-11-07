@@ -14,6 +14,8 @@ data class SourceBlock(
     val lines: List<Rect> = listOf(box),
     /** Typical glyph height in px, used to size the translated text like the original. */
     val lineHeight: Int = box.height(),
+    /** X position of the original OCR hint (reading order for merged vertical columns). */
+    val hintX: Int = box.centerX(),
 )
 
 /** A translated block to draw. All rects are in screen pixels. */

@@ -28,11 +28,11 @@ class Prefs(context: Context) {
         get() = sp.getString("gemini_model", "gemini-3.5-flash-lite") ?: "gemini-3.5-flash-lite"
         set(v) = sp.edit().putString("gemini_model", v.trim()).apply()
 
-    // Gemma 4 31B shows 14,400 RPD on the free tier. The exact API model id was not verified;
-    // edit it in settings if the API returns "model not found".
+    // Gemma 4 (14,400 RPD free). The 26B-A4B MoE variant answers several times faster than 31B
+    // (31B took ~56 s per screen in testing); both ids are listed in Google's Gemma-on-Gemini docs.
     var gemmaModel: String
-        get() = sp.getString("gemma_model", "gemma-4-31b-it") ?: "gemma-4-31b-it"
-        set(v) = sp.edit().putString("gemma_model", v.trim()).apply()
+        get() = sp.getString("gemma_model2", "gemma-4-26b-a4b-it") ?: "gemma-4-26b-a4b-it"
+        set(v) = sp.edit().putString("gemma_model2", v.trim()).apply()
 
     var claudeModel: String
         get() = sp.getString("claude_model", "claude-haiku-5-5") ?: "claude-haiku-5-5"

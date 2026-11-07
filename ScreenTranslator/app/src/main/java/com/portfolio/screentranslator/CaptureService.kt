@@ -296,8 +296,11 @@ class CaptureService : Service() {
             val tOcr = System.currentTimeMillis() - t0
             val topInset = statusBarHeight()
             val barRect = topBar?.bounds()
-            val blocks = ocrResult.blocks.filter { it.box.bottom > topInset + 4 }
-                .filter { barRect == null || !Rect.intersects(it.box, barRect) }
+            val blocks = mergeOverlapping(
+                ocrResult.blocks.filter { it.box.bottom > topInset + 4 }
+                    .filter { barRect == null || !Rect.intersects(it.box, barRect) }
+                    .map { b -> if (b.vertical) refineVertical(bmp, b) else b }
+            )
             lastSource = blocks
             lastBitmap?.recycle(); lastBitmap = bmp
             val comic = prefs.comicMode
@@ -354,6 +357,34 @@ class CaptureService : Service() {
         lastFrameFp = fp
         stableSince = System.currentTimeMillis()
         overlayShownAt = stableSince
+    }
+
+    /**
+     * After ink measurement, several ML Kit "columns" of one bubble resolve to the same area.
+     * Merge blocks whose boxes overlap heavily into one, text joined right-to-left.
+     */
+    private fun mergeOverlapping(blocks: List<SourceBlock>): List<SourceBlock> {
+        val groups = ArrayList<MutableList<SourceBlock>>()
+        for (b in blocks) {
+            val g = groups.firstOrNull { grp -> grp.any { o -> overlapRatio(o.box, b.box) > 0.5f } }
+            if (g != null) g += b else groups += mutableListOf(b)
+        }
+        var id = 1
+        return groups.map { g ->
+            if (g.size == 1) g[0].copy(id = id++) else {
+                val sorted = g.sortedByDescending { it.hintX }
+                val box = Rect(sorted[0].box); for (o in sorted) box.union(o.box)
+                val best = sorted.maxByOrNull { it.lines.size } ?: sorted[0]
+                SourceBlock(id++, sorted.joinToString(" ") { it.text.replace("\n", "") }, box, true, best.lines, best.lineHeight, hintX = best.hintX)
+            }
+        }
+    }
+
+    /** Replace ML Kit's near-zero-width vertical boxes with the measured ink extent. */
+    private fun refineVertical(bmp: Bitmap, b: SourceBlock): SourceBlock {
+        val (bg, _) = ImageUtil.sampleColors(bmp, b.box)
+        val ink = ImageUtil.refineVerticalText(bmp, b.box, ImageUtil.luminance(bg)) ?: return b
+        return b.copy(box = ink.box, lines = ink.columns, lineHeight = ink.glyph, hintX = b.box.centerX())
     }
 
     private fun statusBarHeight(): Int = try {
