@@ -206,7 +206,11 @@ class CaptureService : Service() {
         )
 
         // Per-block windows: boxes can be fully opaque while touches outside them pass through.
-        overlay = OverlayLayer(this, wm, alpha = 1f, fontScale = prefs.fontScale, outlineStyle = prefs.textStyle == "outline", debug = prefs.debugBoxes)
+        overlay = OverlayLayer(
+            this, wm, alpha = 1f, fontScale = prefs.fontScale,
+            outlineStyle = prefs.textStyle == "outline", debug = prefs.debugBoxes,
+            onTouch = { if (!prefs.autoMode && !showingOriginal) dismiss() },
+        )
         compare = CompareView(this, wm)
         topBar = TopBar(
             this, wm, statusBarHeight(),
@@ -397,7 +401,8 @@ class CaptureService : Service() {
     /** Replace ML Kit's near-zero-width vertical boxes with the measured ink extent. */
     private fun refineVertical(bmp: Bitmap, b: SourceBlock): SourceBlock {
         val (bg, _) = ImageUtil.sampleColors(bmp, b.box)
-        val ink = ImageUtil.refineVerticalText(bmp, b.box, ImageUtil.luminance(bg)) ?: return b
+        val chars = b.text.count { !it.isWhitespace() }
+        val ink = ImageUtil.refineVerticalText(bmp, b.box, ImageUtil.luminance(bg), chars) ?: return b
         return b.copy(box = ink.box, lines = ink.columns, lineHeight = ink.glyph, hintX = b.box.centerX())
     }
 

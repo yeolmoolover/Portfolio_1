@@ -57,10 +57,13 @@ object ImageUtil {
      * (allowing gaps smaller than a glyph), then top/bottom the same way. Works on the plain
      * background of a speech bubble; returns null when nothing dark is found.
      */
-    fun refineVerticalText(bmp: Bitmap, hint: Rect, bgLum: Int): InkRegion? {
+    fun refineVerticalText(bmp: Bitmap, hint: Rect, bgLum: Int, charCount: Int): InkRegion? {
         val w = bmp.width; val h = bmp.height
         val cx = hint.centerX().coerceIn(0, w - 1)
-        val span = maxOf(hint.height(), 80)
+        // The hint is one OCR column: its height / character count is a solid glyph estimate.
+        val glyphEst = (hint.height().toFloat() / charCount.coerceAtLeast(1)).coerceIn(8f, w / 10f)
+        // A bubble rarely holds more than ~8 columns; never wander further than that.
+        val span = (glyphEst * 8).toInt().coerceAtLeast(40)
         val x0 = (cx - span).coerceAtLeast(0); val x1 = (cx + span).coerceAtMost(w - 1)
         val y0 = (hint.top - hint.height() / 3).coerceAtLeast(0)
         val y1 = (hint.bottom + hint.height() / 3).coerceAtMost(h - 1)
@@ -84,14 +87,16 @@ object ImageUtil {
         if (seed < 0) return null
         fun runAround(i: Int): IntRange { var a = i; var b = i; while (a > 0 && colInk[a - 1] > 0) a--; while (b < rw - 1 && colInk[b + 1] > 0) b++; return a..b }
         val first = runAround(seed)
-        var glyph = maxOf(6, first.last - first.first + 1)
-        val maxGap = (glyph * 1.1f).toInt()
+        var glyph = glyphEst.toInt()
+        val maxGap = (glyphEst * 0.9f).toInt()
+        val maxRun = (glyphEst * 1.8f).toInt()      // anything wider is artwork, not a column
+        if (first.last - first.first + 1 > maxRun) return null
         // expand left / right collecting column runs
         val runs = ArrayList<IntRange>(); runs += first
         var x = first.first - 1; var gap = 0
-        while (x >= 0) { if (colInk[x] > 0) { val r = runAround(x); runs.add(0, r); x = r.first - 1; gap = 0 } else { gap++; if (gap > maxGap) break; x-- } }
+        while (x >= 0) { if (colInk[x] > 0) { val r = runAround(x); if (r.last - r.first + 1 > maxRun) break; runs.add(0, r); x = r.first - 1; gap = 0 } else { gap++; if (gap > maxGap) break; x-- } }
         x = first.last + 1; gap = 0
-        while (x < rw) { if (colInk[x] > 0) { val r = runAround(x); runs.add(r); x = r.last + 1; gap = 0 } else { gap++; if (gap > maxGap) break; x++ } }
+        while (x < rw) { if (colInk[x] > 0) { val r = runAround(x); if (r.last - r.first + 1 > maxRun) break; runs.add(r); x = r.last + 1; gap = 0 } else { gap++; if (gap > maxGap) break; x++ } }
         // merge runs narrower than a third of a glyph into neighbours (strokes of one column)
         val merged = ArrayList<IntRange>()
         for (r in runs) {
@@ -99,7 +104,7 @@ object ImageUtil {
             if (last != null && r.first - last.last - 1 < glyph * 0.45f) merged[merged.size - 1] = last.first..r.last else merged += r
         }
         val widths = merged.map { it.last - it.first + 1 }.sorted()
-        glyph = maxOf(glyph, widths[widths.size / 2])
+        glyph = widths[widths.size / 2].coerceIn((glyphEst * 0.6f).toInt(), (glyphEst * 1.5f).toInt())
         val left = merged.first().first; val right = merged.last().last
         // row profile over the found columns, expand up / down from the hint centre
         val rowInk = IntArray(rh) { y -> var c = 0; for (xx in left..right) if (ink[y * rw + xx]) c++; c }
@@ -110,6 +115,9 @@ object ImageUtil {
         g = 0; yy = cyr
         while (yy < rh) { if (rowInk[yy] > 0) { bottom = yy; g = 0 } else { g++; if (g > maxGap) break }; yy++ }
         if (bottom - top < glyph) return null
+        // Sanity: the found area must not be wildly larger than the text could occupy.
+        val area = (right - left + 1).toLong() * (bottom - top + 1)
+        if (area > charCount.coerceAtLeast(1).toLong() * glyph * glyph * 6 + glyph * glyph * 4) return null
         val box = Rect(x0 + left, y0 + top, x0 + right + 1, y0 + bottom + 1)
         val cols = merged.map { Rect(x0 + it.first, y0 + top, x0 + it.last + 1, y0 + bottom + 1) }
         return InkRegion(box, cols, glyph)
