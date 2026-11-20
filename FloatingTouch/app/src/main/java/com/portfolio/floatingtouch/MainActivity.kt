@@ -140,6 +140,50 @@ class MainActivity : Activity() {
             addView(Button(context).apply { text = "적용"; setOnClickListener { applyDurInput() } })
         })
 
+        // ---- 스크롤 거리: 화면 높이의 5% ~ 90%, 0.5% 단위 (슬라이더 + 미세조절 버튼) ----
+        val distLabel = TextView(this).apply { textSize = 15f; setPadding(0, dp(8), 0, 0) }
+        val distSeek = SeekBar(this).apply {
+            max = ((Prefs.MAX_SCROLL_PCT - Prefs.MIN_SCROLL_PCT) * 2).roundToInt()
+        }
+        fun pctToProgress(p: Float) = ((p - Prefs.MIN_SCROLL_PCT) * 2).roundToInt()
+        fun setDist(pct: Float) {
+            val v = pct.coerceIn(Prefs.MIN_SCROLL_PCT, Prefs.MAX_SCROLL_PCT)
+            prefs.scrollDistancePct = v
+            val px = (resources.displayMetrics.heightPixels * v / 100f).roundToInt()
+            distLabel.text = "스크롤 거리: 화면 높이의 ${String.format(Locale.US, "%.1f", v)}% (약 ${px}px)"
+            distSeek.progress = pctToProgress(v)
+        }
+        distSeek.setOnSeekBarChangeListener(object : SimpleSeek() {
+            override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {
+                if (fromUser) setDist(Prefs.MIN_SCROLL_PCT + p / 2f)
+            }
+        })
+        root.addView(distLabel)
+        root.addView(distSeek)
+        root.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            listOf(-5f, -0.5f, 0.5f, 5f).forEach { step ->
+                addView(Button(context).apply {
+                    text = if (step > 0) "+$step%" else "$step%"
+                    isAllCaps = false
+                    setOnClickListener { setDist(prefs.scrollDistancePct + step) }
+                }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            }
+        })
+        setDist(prefs.scrollDistancePct)
+        hint("웹툰 한 페이지만큼 넘어가도록 거리를 맞춰보세요. 앱이 터치 시작 후 약간의 거리(터치 슬롭)를 무시하므로 실제 이동량은 설정값보다 조금 작을 수 있습니다.")
+
+        // ---- 관성(미끄러짐) 제거: 끝에서 멈춘 채 누르고 있는 시간 ----
+        seekRow(
+            label = {
+                if (it == 0) "끝에서 멈춤 시간: 0ms (관성 허용 — 주루룩 미끄러짐)"
+                else "끝에서 멈춤 시간: ${it * 10}ms (관성 제거)"
+            },
+            max = (Prefs.MAX_HOLD_MS / 10).toInt(),
+            initial = (prefs.scrollHoldMs / 10).toInt(),
+        ) { prefs.scrollHoldMs = it * 10L }
+        hint("스와이프 끝 지점에서 손가락을 떼기 전에 이 시간만큼 멈춰 있습니다. 멈췄다 떼면 앱이 '속도 0'으로 판단해 미끄러지지 않습니다. 그래도 미끄러지면 값을 늘려보세요(권장 100~200ms).")
+
         root.addView(TextView(this).apply { text = "스크롤 방향"; textSize = 15f; setPadding(0, dp(8), 0, 0) })
         root.addView(RadioGroup(this).apply {
             orientation = RadioGroup.HORIZONTAL

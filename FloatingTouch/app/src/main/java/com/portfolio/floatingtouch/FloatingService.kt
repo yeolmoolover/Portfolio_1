@@ -147,24 +147,41 @@ class FloatingService : AccessibilityService() {
 
         val s = ScreenUtil.size(wm)
         val x = s.x / 2f
-        val top = s.y * 0.25f
-        val bottom = s.y * 0.75f
-        val path = Path().apply {
-            if (prefs.scrollDown) { moveTo(x, bottom); lineTo(x, top) } // 손가락 위로 → 아래 내용
-            else { moveTo(x, top); lineTo(x, bottom) }
-        }
+        // 설정한 거리만큼, 화면 세로 중앙을 기준으로 위아래 대칭 배치
+        val half = s.y * prefs.scrollDistancePct / 100f / 2f
+        val top = s.y / 2f - half
+        val bottom = s.y / 2f + half
+        val (startY, endY) = if (prefs.scrollDown) bottom to top // 손가락 위로 → 아래 내용
+        else top to bottom
+        val path = Path().apply { moveTo(x, startY); lineTo(x, endY) }
         val duration = prefs.scrollDurationMs
-        val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0, duration))
-            .build()
+        val holdMs = prefs.scrollHoldMs
+
+        // 1단계: 이동. holdMs > 0 이면 손가락을 떼지 않은 채로 끝낸다(willContinue=true).
+        val moveStroke = GestureDescription.StrokeDescription(path, 0, duration, holdMs > 0)
+        val moveGesture = GestureDescription.Builder().addStroke(moveStroke).build()
+
+        val finishCb = object : GestureResultCallback() {
+            override fun onCompleted(g: GestureDescription?) = finishScroll()
+            override fun onCancelled(g: GestureDescription?) = finishScroll()
+        }
 
         // 스와이프 경로 위에 플로팅 버튼이 있으면 버튼이 터치를 가로채므로 잠시 터치 불가로 만든다.
         setAllTouchable(false)
         handler.postDelayed({
-            val accepted = dispatchGesture(gesture, object : GestureResultCallback() {
-                override fun onCompleted(g: GestureDescription?) = finishScroll()
+            val cb = if (holdMs <= 0) finishCb else object : GestureResultCallback() {
+                override fun onCompleted(g: GestureDescription?) {
+                    // 2단계: 끝 지점에서 움직이지 않고 holdMs 동안 누르고 있다가 뗀다 → 관성 제거
+                    val holdPath = Path().apply { moveTo(x, endY) }
+                    val holdStroke = moveStroke.continueStroke(holdPath, 0, holdMs, false)
+                    val ok = dispatchGesture(
+                        GestureDescription.Builder().addStroke(holdStroke).build(), finishCb, null
+                    )
+                    if (!ok) finishScroll()
+                }
                 override fun onCancelled(g: GestureDescription?) = finishScroll()
-            }, null)
+            }
+            val accepted = dispatchGesture(moveGesture, cb, null)
             if (!accepted) finishScroll()
         }, TOUCHABLE_SETTLE_MS)
     }

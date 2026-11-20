@@ -15,6 +15,20 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("scroll_down", true)
         set(v) = sp.edit().putBoolean("scroll_down", v).apply()
 
+    /** 한 번에 스와이프할 거리 (화면 높이의 %, 5.0 ~ 90.0) */
+    var scrollDistancePct: Float
+        get() = sp.getFloat("scroll_dist", DEFAULT_SCROLL_PCT).coerceIn(MIN_SCROLL_PCT, MAX_SCROLL_PCT)
+        set(v) = sp.edit().putFloat("scroll_dist", v.coerceIn(MIN_SCROLL_PCT, MAX_SCROLL_PCT)).apply()
+
+    /**
+     * 스와이프 끝에서 손가락을 떼기 전에 멈춰 있는 시간(ms). 0 이면 관성(미끄러짐) 허용.
+     * 안드로이드 VelocityTracker 는 마지막 움직임 후 일정 시간(약 40ms) 이상 멈추면
+     * 속도를 0으로 보므로, 손을 뗄 때 플링(주루룩 미끄러짐)이 생기지 않는다.
+     */
+    var scrollHoldMs: Long
+        get() = sp.getLong("scroll_hold", DEFAULT_HOLD_MS).coerceIn(0L, MAX_HOLD_MS)
+        set(v) = sp.edit().putLong("scroll_hold", v.coerceIn(0L, MAX_HOLD_MS)).apply()
+
     var tapIntervalMs: Long
         get() = sp.getLong("tap_ms", MIN_TAP_MS).coerceIn(MIN_TAP_MS, MAX_TAP_MS)
         set(v) = sp.edit().putLong("tap_ms", v.coerceIn(MIN_TAP_MS, MAX_TAP_MS)).apply()
@@ -65,6 +79,11 @@ class Prefs(context: Context) {
 
         const val MIN_SCROLL_MS = 1L        // 0.001초
         const val MAX_SCROLL_MS = 10_000L   // 10초
+        const val MIN_SCROLL_PCT = 5f
+        const val MAX_SCROLL_PCT = 90f      // 하단 제스처 바/상단 상태바를 피하기 위해 90% 까지
+        const val DEFAULT_SCROLL_PCT = 60f
+        const val DEFAULT_HOLD_MS = 150L
+        const val MAX_HOLD_MS = 500L
         const val MIN_TAP_MS = 1_000L       // 1초
         const val MAX_TAP_MS = 10_000L      // 10초
 
