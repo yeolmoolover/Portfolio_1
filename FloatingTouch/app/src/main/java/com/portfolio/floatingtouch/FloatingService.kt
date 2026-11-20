@@ -72,6 +72,7 @@ class FloatingService : AccessibilityService() {
         tapItem?.detach(); tapItem = null; tapView = null
         markerItem?.detach(); markerItem = null; markerView = null
         instance = null
+        ToggleTileService.refresh(this)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -88,15 +89,19 @@ class FloatingService : AccessibilityService() {
     /** 설정 화면에서 값이 바뀔 때마다 호출된다. */
     fun applySettings() {
         val screen = ScreenUtil.size(wm)
+        val visible = prefs.overlayVisible
+        ToggleTileService.refresh(this)
 
         // ---- 1. 빠른 스크롤 버튼 ----
-        if (prefs.scrollEnabled) {
+        if (visible && prefs.scrollEnabled) {
             if (scrollItem == null) {
                 val v = CircleButtonView(this, 0xFF1E88E5.toInt(), 0xFF0D47A1.toInt())
                 scrollView = v
-                scrollItem = OverlayItem(this, wm, prefs, Prefs.KEY_SCROLL, v, edgeHide = true) {
-                    onScrollClicked()
-                }.also { it.attach(screen.x - dp(72), screen.y / 3) }
+                scrollItem = OverlayItem(
+                    this, wm, prefs, Prefs.KEY_SCROLL, v, edgeHide = true,
+                    onClick = { onScrollClicked() },
+                    onLongPress = { setOverlayVisible(false) },
+                ).also { it.attach(screen.x - dp(72), screen.y / 3) }
             }
             scrollView?.setLabel(if (prefs.scrollDown) "▼" else "▲")
             scrollItem?.applyStyle(prefs.sizeDp(Prefs.KEY_SCROLL), prefs.alpha(Prefs.KEY_SCROLL))
@@ -105,11 +110,11 @@ class FloatingService : AccessibilityService() {
         }
 
         // ---- 2. 자동 반복 터치 버튼 + 터치 위치 조준점 ----
-        if (prefs.tapEnabled) {
+        if (visible && prefs.tapEnabled) {
             if (markerItem == null) {
                 val mv = TargetMarkerView(this)
                 markerView = mv
-                markerItem = OverlayItem(this, wm, prefs, Prefs.KEY_TARGET, mv, edgeHide = false) {}
+                markerItem = OverlayItem(this, wm, prefs, Prefs.KEY_TARGET, mv, edgeHide = false, onClick = {})
                     .also {
                         it.applyStyle(48, 1f)
                         it.attach(screen.x / 2 - dp(24), screen.y / 2 - dp(24))
@@ -118,9 +123,11 @@ class FloatingService : AccessibilityService() {
             if (tapItem == null) {
                 val v = CircleButtonView(this, 0xFFE53935.toInt(), 0xFF43A047.toInt())
                 tapView = v
-                tapItem = OverlayItem(this, wm, prefs, Prefs.KEY_TAP, v, edgeHide = true) {
-                    if (tapping) stopTapping() else startTapping()
-                }.also { it.attach(screen.x - dp(72), screen.y / 3 + dp(90)) }
+                tapItem = OverlayItem(
+                    this, wm, prefs, Prefs.KEY_TAP, v, edgeHide = true,
+                    onClick = { if (tapping) stopTapping() else startTapping() },
+                    onLongPress = { setOverlayVisible(false) },
+                ).also { it.attach(screen.x - dp(72), screen.y / 3 + dp(90)) }
             }
             tapView?.setLabel(if (tapping) "■" else "▶")
             tapItem?.applyStyle(prefs.sizeDp(Prefs.KEY_TAP), prefs.alpha(Prefs.KEY_TAP))
@@ -128,6 +135,17 @@ class FloatingService : AccessibilityService() {
             stopTapping()
             tapItem?.detach(); tapItem = null; tapView = null
             markerItem?.detach(); markerItem = null; markerView = null
+        }
+    }
+
+    /** 서비스는 켜 둔 채로 플로팅 버튼만 숨기기/보이기 */
+    fun setOverlayVisible(visible: Boolean) {
+        prefs.overlayVisible = visible
+        applySettings()
+        if (!visible) {
+            Toast.makeText(
+                this, "플로팅 버튼 숨김 — 빠른 설정 타일이나 앱에서 다시 켤 수 있어요", Toast.LENGTH_SHORT
+            ).show()
         }
     }
 

@@ -24,7 +24,18 @@ class OverlayItem(
     val view: View,
     private val edgeHide: Boolean,
     private val onClick: () -> Unit,
+    private val onLongPress: (() -> Unit)? = null,
 ) {
+    private val longPressHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var longPressed = false
+    private val longPressRunnable = Runnable {
+        if (!dragging) {
+            longPressed = true
+            view.scaleX = 1f
+            view.scaleY = 1f
+            onLongPress?.invoke()
+        }
+    }
     private val density = context.resources.displayMetrics.density
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     private val edgeTriggerPx = (20 * density).roundToInt()
@@ -64,6 +75,7 @@ class OverlayItem(
     }
 
     fun detach() {
+        longPressHandler.removeCallbacks(longPressRunnable)
         if (!attached) return
         runCatching { wm.removeView(view) }
         attached = false
@@ -152,15 +164,23 @@ class OverlayItem(
                     startX = params.x
                     startY = params.y
                     dragging = false
+                    longPressed = false
                     view.scaleX = 0.92f
                     view.scaleY = 0.92f
+                    if (onLongPress != null) {
+                        longPressHandler.postDelayed(
+                            longPressRunnable, ViewConfiguration.getLongPressTimeout().toLong() + 200
+                        )
+                    }
                 }
 
                 MotionEvent.ACTION_MOVE -> {
                     val dx = e.rawX - downRawX
                     val dy = e.rawY - downRawY
+                    if (longPressed) return@setOnTouchListener true
                     if (draggable && !dragging && hypot(dx, dy) > touchSlop) {
                         dragging = true
+                        longPressHandler.removeCallbacks(longPressRunnable)
                         if (hiddenSide != 0) {
                             hiddenSide = 0
                             applyAlpha()
@@ -175,9 +195,12 @@ class OverlayItem(
                 }
 
                 MotionEvent.ACTION_UP -> {
+                    longPressHandler.removeCallbacks(longPressRunnable)
                     view.scaleX = 1f
                     view.scaleY = 1f
-                    if (!dragging) {
+                    if (longPressed) {
+                        // 길게 누르기로 이미 처리됨
+                    } else if (!dragging) {
                         if (hiddenSide != 0) reveal() else onClick()
                     } else {
                         val w = ScreenUtil.size(wm).x
@@ -195,6 +218,7 @@ class OverlayItem(
                 }
 
                 MotionEvent.ACTION_CANCEL -> {
+                    longPressHandler.removeCallbacks(longPressRunnable)
                     view.scaleX = 1f
                     view.scaleY = 1f
                     if (dragging) {

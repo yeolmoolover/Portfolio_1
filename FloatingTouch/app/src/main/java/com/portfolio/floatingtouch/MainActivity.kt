@@ -35,6 +35,9 @@ class MainActivity : Activity() {
     private lateinit var prefs: Prefs
     private lateinit var statusText: TextView
     private lateinit var root: LinearLayout
+    @Suppress("DEPRECATION")
+    private lateinit var visibleSwitch: Switch
+    private var syncingSwitch = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,6 +63,10 @@ class MainActivity : Activity() {
         statusText.text = if (on) "● 서비스 실행 중 — 플로팅 버튼이 화면에 표시됩니다"
         else "○ 서비스 꺼짐 — 아래 '접근성 설정 열기'에서 「${getString(R.string.service_label)}」을 켜주세요"
         statusText.setTextColor(if (on) 0xFF2E7D32.toInt() else 0xFFC62828.toInt())
+        // 길게 누르기/타일로 바뀐 상태를 반영 (리스너는 실행하지 않음)
+        syncingSwitch = true
+        visibleSwitch.isChecked = prefs.overlayVisible
+        syncingSwitch = false
     }
 
     // ---------------------------------------------------------------- UI
@@ -83,13 +90,24 @@ class MainActivity : Activity() {
                     listOf(Prefs.KEY_SCROLL, Prefs.KEY_TAP, Prefs.KEY_TARGET).forEach(prefs::resetPosition)
                 }
         }
-        button("서비스 끄기 (모든 플로팅 버튼 제거)") {
-            FloatingService.instance?.disableSelf()
-            statusText.postDelayed({ updateStatus() }, 300)
+        visibleSwitch = Switch(this).apply {
+            text = "플로팅 버튼 보이기"; textSize = 16f; typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, dp(12), 0, dp(12))
+            setOnCheckedChangeListener { _, c ->
+                if (syncingSwitch) return@setOnCheckedChangeListener
+                if (FloatingService.instance != null) FloatingService.instance?.setOverlayVisible(c)
+                else prefs.overlayVisible = c
+            }
         }
+        root.addView(visibleSwitch)
 
         hint(
-            "• 버튼을 드래그해서 옮길 수 있습니다.\n" +
+            "• 서비스는 한 번만 켜두면 됩니다. 버튼을 잠깐 치우고 싶을 땐 서비스를 끄지 말고 아래 방법을 쓰세요.\n" +
+                "   ① 플로팅 버튼을 길게 누르기 → 모든 플로팅 버튼 숨김\n" +
+                "   ② 상단바를 내려 빠른 설정의 「플로팅 버튼」 타일 탭 → 숨기기/보이기\n" +
+                "      (처음 한 번: 빠른 설정 편집(연필 아이콘)에서 타일을 끌어다 추가)\n" +
+                "   ③ 이 화면의 「플로팅 버튼 보이기」 스위치\n" +
+                "• 버튼을 드래그해서 옮길 수 있습니다.\n" +
                 "• 버튼을 화면 왼쪽/오른쪽 끝까지 끌어다 놓으면 엣지에 숨겨집니다. 숨겨진 버튼을 탭하면 다시 나타납니다."
         )
 

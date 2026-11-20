@@ -33,6 +33,11 @@ class Prefs(context: Context) {
         get() = sp.getLong("tap_ms", MIN_TAP_MS).coerceIn(MIN_TAP_MS, MAX_TAP_MS)
         set(v) = sp.edit().putLong("tap_ms", v.coerceIn(MIN_TAP_MS, MAX_TAP_MS)).apply()
 
+    /** 플로팅 버튼 전체 보이기/숨기기 (서비스는 켜 둔 채로) */
+    var overlayVisible: Boolean
+        get() = sp.getBoolean("overlay_visible", true)
+        set(v) = sp.edit().putBoolean("overlay_visible", v).apply()
+
     var scrollEnabled: Boolean
         get() = sp.getBoolean("scroll_enabled", true)
         set(v) = sp.edit().putBoolean("scroll_enabled", v).apply()
