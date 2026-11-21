@@ -37,8 +37,6 @@ class FloatingService : AccessibilityService() {
         private const val AUTO_LIFT_HOLD_MS = 80L
         /** 자동 스크롤: 사용자 터치 등으로 중단되면 이만큼 쉬었다가 재개 */
         private const val AUTO_RESUME_DELAY_MS = 1000L
-        /** 제스처 응답이 이 시간(+제스처 길이) 안에 안 오면 실패로 처리 */
-        private const val GESTURE_TIMEOUT_MARGIN_MS = 1000L
     }
 
     private lateinit var wm: WindowManager
@@ -89,7 +87,7 @@ class FloatingService : AccessibilityService() {
 
     private fun log(msg: String) {
         detectLog.addFirst("${timeFmt.format(java.util.Date())}  $msg")
-        while (detectLog.size > 40) detectLog.removeLast()
+        while (detectLog.size > 20) detectLog.removeLast()
     }
 
     /** 앱을 벗어난 것으로 판단한 뒤 실제로 숨기기까지의 유예 (잠깐 스쳐가는 창 무시) */
@@ -328,74 +326,47 @@ class FloatingService : AccessibilityService() {
         val half = s.y * prefs.scrollDistancePct / 100f / 2f
         val top = s.y / 2f - half
         val bottom = s.y / 2f + half
-        val down = prefs.scrollDown
-        val (startY, endY) = if (down) bottom to top // 손가락 위로 → 아래 내용
+        val (startY, endY) = if (prefs.scrollDown) bottom to top // 손가락 위로 → 아래 내용
         else top to bottom
         val path = Path().apply { moveTo(x, startY); lineTo(x, endY) }
         val duration = prefs.scrollDurationMs
         val holdMs = prefs.scrollHoldMs
-        log("빠른넘김 시작 (${duration}ms, 멈춤 ${holdMs}ms)")
 
         // 1단계: 이동. holdMs > 0 이면 손가락을 떼지 않은 채로 끝낸다(willContinue=true).
         val moveStroke = GestureDescription.StrokeDescription(path, 0, duration, holdMs > 0)
+        val moveGesture = GestureDescription.Builder().addStroke(moveStroke).build()
+
+        val finishCb = object : GestureResultCallback() {
+            override fun onCompleted(g: GestureDescription?) = finishScroll()
+            override fun onCancelled(g: GestureDescription?) = finishScroll()
+        }
 
         // 스와이프 경로 위에 플로팅 버튼이 있으면 버튼이 터치를 가로채므로 잠시 터치 불가로 만든다.
-        // (결과가 어떻든 finishScroll 이 반드시 한 번 불려 버튼이 다시 눌리게 된다)
         setAllTouchable(false)
         handler.postDelayed({
-            sendGesture(moveStroke, "빠른넘김 이동", duration) { ok ->
-                if (!ok || holdMs <= 0) {
-                    finishScroll(ok)
-                    return@sendGesture
+            val cb = if (holdMs <= 0) finishCb else object : GestureResultCallback() {
+                override fun onCompleted(g: GestureDescription?) {
+                    // 2단계: 끝 지점에서 움직이지 않고 holdMs 동안 누르고 있다가 뗀다 → 관성 제거
+                    val holdPath = Path().apply { moveTo(x, endY) }
+                    val holdStroke = moveStroke.continueStroke(holdPath, 0, holdMs, false)
+                    val ok = dispatchGesture(
+                        GestureDescription.Builder().addStroke(holdStroke).build(), finishCb, null
+                    )
+                    if (!ok) finishScroll()
                 }
-                // 2단계: 끝 지점에서 holdMs 동안 거의 움직이지 않고(0.5px) 누르고 있다가 뗀다 → 관성 제거.
-                // 길이 0인 경로는 일부 기기에서 완료 응답이 오지 않을 수 있어 아주 짧은 경로를 쓴다.
-                val nudge = if (down) -0.5f else 0.5f
-                val holdPath = Path().apply { moveTo(x, endY); lineTo(x, endY + nudge) }
-                val holdStroke = moveStroke.continueStroke(holdPath, 0, holdMs, false)
-                sendGesture(holdStroke, "빠른넘김 멈춤", holdMs) { ok2 -> finishScroll(ok2) }
+                override fun onCancelled(g: GestureDescription?) = finishScroll()
             }
+            val accepted = dispatchGesture(moveGesture, cb, null)
+            if (!accepted) finishScroll()
         }, TOUCHABLE_SETTLE_MS)
     }
 
-    private fun finishScroll(ok: Boolean) {
-        if (ok) log("빠른넘김 완료")
-        scrolling = false
-        scrollView?.setActive(false)
-        setAllTouchable(true)
-    }
-
-    /**
-     * 제스처 하나를 보내고 결과를 '정확히 한 번' 알려준다 (메인 스레드).
-     * 완료/취소/거부 응답이 없더라도 (제스처 길이 + 1초) 뒤에는 실패로 처리해서
-     * 버튼이 터치 불가 상태로 남는 일이 없게 한다.
-     */
-    private fun sendGesture(
-        stroke: GestureDescription.StrokeDescription,
-        tag: String,
-        strokeMs: Long,
-        onDone: (Boolean) -> Unit,
-    ) {
-        var done = false
-        lateinit var watchdog: Runnable
-        fun finish(ok: Boolean, why: String) {
-            if (done) return
-            done = true
-            handler.removeCallbacks(watchdog)
-            if (!ok) log("$tag: $why")
-            onDone(ok)
+    private fun finishScroll() {
+        handler.post {
+            scrolling = false
+            scrollView?.setActive(false)
+            setAllTouchable(true)
         }
-        watchdog = Runnable { finish(false, "응답 없음(시간 초과)") }
-        handler.postDelayed(watchdog, strokeMs + GESTURE_TIMEOUT_MARGIN_MS)
-        val accepted = dispatchGesture(
-            GestureDescription.Builder().addStroke(stroke).build(),
-            object : GestureResultCallback() {
-                override fun onCompleted(g: GestureDescription?) { handler.post { finish(true, "") } }
-                override fun onCancelled(g: GestureDescription?) { handler.post { finish(false, "취소됨") } }
-            },
-            null,
-        )
-        if (!accepted) finish(false, "거부됨")
     }
 
     private fun setAllTouchable(touchable: Boolean) {
@@ -502,12 +473,19 @@ class FloatingService : AccessibilityService() {
         // 시작 지점이 플로팅 버튼 위면 버튼이 터치를 가로채므로 시작 순간만 잠시 터치 불가
         setAllTouchable(false)
         handler.postDelayed({
-            sendGesture(stroke, "자동스크롤 시작", 40) { ok ->
-                if (!scrolling) setAllTouchable(true)
-                if (ok) continueAuto(stroke) else onAutoCancelled()
-            }
+            val ok = dispatchGesture(
+                GestureDescription.Builder().addStroke(stroke).build(), autoCallback(stroke), null
+            )
+            handler.postDelayed({ if (!scrolling) setAllTouchable(true) }, 60)
+            if (!ok) onAutoCancelled()
         }, TOUCHABLE_SETTLE_MS)
     }
+
+    private fun autoCallback(stroke: GestureDescription.StrokeDescription) =
+        object : GestureResultCallback() {
+            override fun onCompleted(g: GestureDescription?) = continueAuto(stroke)
+            override fun onCancelled(g: GestureDescription?) = onAutoCancelled()
+        }
 
     private fun continueAuto(prev: GestureDescription.StrokeDescription) {
         val pxPerSec = prefs.autoSpeedDp * resources.displayMetrics.density
@@ -520,23 +498,26 @@ class FloatingService : AccessibilityService() {
         val path = Path().apply { moveTo(autoX, autoY); lineTo(autoX, newY) }
         autoY = newY
         val next = prev.continueStroke(path, 0, AUTO_SEGMENT_MS, true)
-        sendGesture(next, "자동스크롤 이동", AUTO_SEGMENT_MS) { ok ->
-            if (ok) continueAuto(next) else onAutoCancelled()
-        }
+        val ok = dispatchGesture(
+            GestureDescription.Builder().addStroke(next).build(), autoCallback(next), null
+        )
+        if (!ok) onAutoCancelled()
     }
 
-    /** 거의 제자리(0.5px)에서 잠깐 멈췄다가 손을 뗀다 → 앱이 속도 0으로 판단, 미끄러짐 없음 */
+    /** 제자리에서 잠깐 멈췄다가 손을 뗀다 → 앱이 속도 0으로 판단, 미끄러짐 없음 */
     private fun liftAuto(prev: GestureDescription.StrokeDescription) {
-        val holdPath = Path().apply { moveTo(autoX, autoY); lineTo(autoX, autoY - 0.5f) }
-        val hold = prev.continueStroke(holdPath, 0, AUTO_LIFT_HOLD_MS, false)
-        sendGesture(hold, "자동스크롤 떼기", AUTO_LIFT_HOLD_MS) { ok ->
-            if (!ok) {
-                onAutoCancelled()
-                return@sendGesture
-            }
-            autoFingerDown = false
-            if (autoWanted) beginAutoStroke()  // 아래에서 다시 시작
-        }
+        val hold = prev.continueStroke(Path().apply { moveTo(autoX, autoY) }, 0, AUTO_LIFT_HOLD_MS, false)
+        val ok = dispatchGesture(
+            GestureDescription.Builder().addStroke(hold).build(),
+            object : GestureResultCallback() {
+                override fun onCompleted(g: GestureDescription?) {
+                    autoFingerDown = false
+                    if (autoWanted) beginAutoStroke()  // 아래에서 다시 시작
+                }
+                override fun onCancelled(g: GestureDescription?) = onAutoCancelled()
+            }, null
+        )
+        if (!ok) onAutoCancelled()
     }
 
     /**
