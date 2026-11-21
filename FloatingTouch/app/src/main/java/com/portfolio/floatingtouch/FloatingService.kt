@@ -7,7 +7,9 @@ import android.content.res.Configuration
 import android.graphics.Path
 import android.os.Handler
 import android.os.Looper
+import android.app.NotificationManager
 import android.view.ViewConfiguration
+import android.view.inputmethod.InputMethodManager
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.Toast
@@ -60,10 +62,60 @@ class FloatingService : AccessibilityService() {
         wm = getSystemService(WindowManager::class.java)
         prefs = Prefs(this)
         instance = this
+        // 이전 버전에서 띄우던 알림표시줄 알림이 남아 있으면 지운다 (알림 기능 삭제됨)
+        runCatching { getSystemService(NotificationManager::class.java).cancelAll() }
         applySettings()
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
+    // ===================== 앱 지정 모드: 지금 화면 맨 앞의 앱 감지 =====================
+
+    /** 마지막으로 감지된 '일반 앱' 패키지 (키보드·상태바·이 앱 자체는 제외) */
+    var foregroundPackage: String? = null
+        private set
+    private var wasInTargetApp = false
+
+    fun isInTargetApp(): Boolean = foregroundPackage?.let { it in prefs.targetApps } == true
+
+    /** 앱 지정 모드를 반영한 실제 표시 여부 */
+    private fun effectiveVisible(): Boolean =
+        prefs.overlayVisible && (!prefs.appModeEnabled || isInTargetApp())
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        val pkg = event.packageName?.toString() ?: return
+        if (pkg == packageName) {
+            // 이 앱 설정 화면이 열림: 버튼은 그대로 두되(미리보기용) 실행 중인 동작은 멈춘다
+            stopTapping()
+            stopAuto()
+            return
+        }
+        // 상태바/알림창, 키보드가 뜨는 것은 '앱 전환'이 아니므로 무시
+        if (pkg == "com.android.systemui" || pkg in imePackages()) return
+        if (pkg == foregroundPackage) return
+        foregroundPackage = pkg
+
+        if (!prefs.appModeEnabled) return
+        val inTarget = isInTargetApp()
+        // 지정한 앱에 들어오면 자동으로 켜기 (이전에 '모두 끄기' 했더라도)
+        if (inTarget && !wasInTargetApp) prefs.overlayVisible = true
+        wasInTargetApp = inTarget
+        applySettings()
+    }
+
+    private fun imePackages(): Set<String> = runCatching {
+        getSystemService(InputMethodManager::class.java).enabledInputMethodList
+            .map { it.packageName }.toSet()
+    }.getOrDefault(emptySet())
+
+    /** 플로팅 버튼 길게 누르기 → 설정 앱 열기 */
+    private fun openApp() {
+        stopTapping()
+        stopAuto()
+        startActivity(
+            Intent(this, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        )
+    }
     override fun onInterrupt() = Unit
 
     override fun onUnbind(intent: Intent?): Boolean {
@@ -86,7 +138,6 @@ class FloatingService : AccessibilityService() {
         autoItem?.detach(); autoItem = null; autoView = null
         instance = null
         ToggleTileService.refresh(this)
-        ControlNotification.cancel(this)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -104,9 +155,8 @@ class FloatingService : AccessibilityService() {
     /** 설정 화면에서 값이 바뀔 때마다 호출된다. */
     fun applySettings() {
         val screen = ScreenUtil.size(wm)
-        val visible = prefs.overlayVisible
+        val visible = effectiveVisible()
         ToggleTileService.refresh(this)
-        ControlNotification.show(this, prefs)
 
         // ---- 1. 빠른 스크롤 버튼 ----
         if (visible && prefs.scrollEnabled) {
@@ -116,7 +166,7 @@ class FloatingService : AccessibilityService() {
                 scrollItem = OverlayItem(
                     this, wm, prefs, Prefs.KEY_SCROLL, v, edgeHide = true,
                     onClick = { onScrollClicked() },
-                    onLongPress = { setOverlayVisible(false) },
+                    onLongPress = { openApp() },
                 ).also { it.attach(screen.x - dp(72), screen.y / 3) }
             }
             scrollView?.setLabel(if (prefs.scrollDown) "▼" else "▲")
@@ -142,7 +192,7 @@ class FloatingService : AccessibilityService() {
                 tapItem = OverlayItem(
                     this, wm, prefs, Prefs.KEY_TAP, v, edgeHide = true,
                     onClick = { if (tapping) stopTapping() else startTapping() },
-                    onLongPress = { setOverlayVisible(false) },
+                    onLongPress = { openApp() },
                 ).also { it.attach(screen.x - dp(72), screen.y / 3 + dp(90)) }
             }
             tapView?.setLabel(if (tapping) "■" else "▶")
@@ -164,7 +214,7 @@ class FloatingService : AccessibilityService() {
                 autoItem = OverlayItem(
                     this, wm, prefs, Prefs.KEY_AUTO, v, edgeHide = true,
                     onClick = { if (autoWanted) stopAuto() else startAuto() },
-                    onLongPress = { setOverlayVisible(false) },
+                    onLongPress = { openApp() },
                 ).also { it.attach(screen.x - dp(72), screen.y / 3 + dp(180)) }
             }
             autoView?.setLabel(if (autoWanted) "■" else "↓")
@@ -183,16 +233,6 @@ class FloatingService : AccessibilityService() {
             Toast.makeText(
                 this, "모두 꺼짐 — 앱 화면이나 빠른 설정 타일에서 다시 켤 수 있어요", Toast.LENGTH_SHORT
             ).show()
-        }
-    }
-
-    /** 알림표시줄 버튼 처리 */
-    fun handleControl(action: String) {
-        when (action) {
-            ControlNotification.ACTION_SCROLL -> Controls.toggle(this, Feature.SCROLL)
-            ControlNotification.ACTION_TAP -> Controls.toggle(this, Feature.TAP)
-            ControlNotification.ACTION_AUTO -> Controls.toggle(this, Feature.AUTO)
-            ControlNotification.ACTION_OFF -> Controls.allOff(this)
         }
     }
 

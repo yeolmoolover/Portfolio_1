@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- 알림표시줄 컨트롤 (Android 13+) -->
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- 앱 지정 모드에서 설치된 앱 목록을 보여주기 위해 (Android 11+ 패키지 가시성) -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="true"
@@ -33,11 +38,6 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
-
-        <!-- 알림표시줄 버튼 클릭 수신 -->
-        <receiver
-            android:name=".ControlReceiver"
-            android:exported="false" />
 
         <!-- 빠른 설정 타일: 플로팅 버튼 보이기/숨기기 -->
         <service

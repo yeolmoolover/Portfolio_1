@@ -38,6 +38,16 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("overlay_visible", true)
         set(v) = sp.edit().putBoolean("overlay_visible", v).apply()
 
+    /** 앱 지정 모드: 켜면 지정한 앱이 화면에 있을 때만 플로팅 버튼이 보인다 */
+    var appModeEnabled: Boolean
+        get() = sp.getBoolean("app_mode", false)
+        set(v) = sp.edit().putBoolean("app_mode", v).apply()
+
+    /** 앱 지정 모드 대상 앱 패키지 이름들 */
+    var targetApps: Set<String>
+        get() = sp.getStringSet("target_apps", emptySet())!!.toSet()
+        set(v) = sp.edit().putStringSet("target_apps", v.toSet()).apply()
+
     var scrollEnabled: Boolean
         get() = sp.getBoolean("scroll_enabled", true)
         set(v) = sp.edit().putBoolean("scroll_enabled", v).apply()

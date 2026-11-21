@@ -1,8 +1,6 @@
 package com.portfolio.floatingtouch
 
-import android.Manifest
 import android.app.Activity
-import android.os.Build
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
@@ -45,15 +43,11 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(16), dp(16), dp(32))
         }
         setContentView(ScrollView(this).apply { addView(root) })
-        // Android 13+ : 알림표시줄 컨트롤을 띄우려면 알림 권한 필요
-        if (Build.VERSION.SDK_INT >= 33 && !ControlNotification.canPost(this)) {
-            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIF)
-        }
     }
 
     override fun onResume() {
         super.onResume()
-        // 알림/타일/길게 누르기로 바뀐 상태를 반영하려고 화면을 다시 그린다
+        // 타일 등으로 바뀐 상태를 반영하려고 화면을 다시 그린다
         refresh()
     }
 
@@ -65,24 +59,13 @@ class MainActivity : Activity() {
         (root.parent as? ScrollView)?.post { (root.parent as ScrollView).scrollTo(0, scrollY) }
     }
 
-    override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, results: IntArray) {
-        super.onRequestPermissionsResult(code, perms, results)
-        if (code == REQ_NOTIF) {
-            FloatingService.instance?.applySettings()  // 권한 받은 즉시 알림 표시
-            if (!ControlNotification.canPost(this)) toast("알림 권한이 없으면 알림표시줄 컨트롤이 표시되지 않습니다")
-        }
-    }
-
-    companion object {
-        private const val REQ_NOTIF = 10
-    }
-
     private fun dp(v: Int) = (v * resources.displayMetrics.density).roundToInt()
     private fun apply() = FloatingService.instance?.applySettings()
 
     private fun updateStatus() {
         val on = FloatingService.instance != null
-        statusText.text = if (on) "● 서비스 실행 중 — 아래 버튼을 눌러 기능을 켜고 끄세요"
+        statusText.text = if (on && prefs.appModeEnabled) "● 서비스 실행 중 — 앱 지정 모드: 선택한 앱에서만 버튼이 보입니다"
+        else if (on) "● 서비스 실행 중 — 아래 버튼을 눌러 기능을 켜고 끄세요"
         else "○ 서비스 꺼짐 — 접근성 설정에서 「${getString(R.string.service_label)}」을 켜주세요"
         statusText.setTextColor(if (on) 0xFF2E7D32.toInt() else 0xFFC62828.toInt())
     }
@@ -113,14 +96,40 @@ class MainActivity : Activity() {
         bigButton("✕  모두 끄기", null, 0xFF616161.toInt(), false, heightDp = 56) {
             Controls.allOff(this); refresh()
         }
-        hint("기능이 하나라도 켜져 있으면 알림표시줄에 「플로팅 터치」 알림이 생겨 [1] [2] [3] [끄기]로 바로 켜고 끌 수 있습니다. 「모두 끄기」(또는 알림의 [끄기], 플로팅 버튼 길게 누르기)를 하면 플로팅 버튼과 알림·상태바 아이콘이 모두 사라집니다. 다시 쓰려면 이 화면에서 기능을 켜세요.")
+        hint("플로팅 버튼을 길게 누르면 이 설정 화면이 열립니다.")
+
+        // ================= 앱 지정 모드 =================
+        section("특정 앱에서만 자동으로 켜기")
+        val apps = prefs.targetApps
+        val appMode = prefs.appModeEnabled
+        bigButton(
+            "앱 지정 모드   ${if (appMode) "ON" else "OFF"}",
+            if (appMode) "선택한 앱을 열면 자동으로 나타나고, 나가면 사라집니다"
+            else "탭해서 켜기 · 켜면 아래 선택한 앱에서만 버튼이 보입니다",
+            0xFF00897B.toInt(), appMode, heightDp = 76,
+        ) {
+            if (!appMode && apps.isEmpty()) {
+                toast("먼저 앱을 선택하세요")
+                pickApps()
+            } else {
+                prefs.appModeEnabled = !appMode
+                apply(); refresh()
+            }
+        }
+        root.addView(TextView(this).apply {
+            textSize = 15f; setPadding(0, dp(2), 0, dp(4))
+            text = if (apps.isEmpty()) "선택한 앱: 없음"
+            else "선택한 앱: " + apps.map { appLabel(it) }.sorted().joinToString(", ")
+        })
+        button("앱 선택하기 (${apps.size}개 선택됨)") { pickApps() }
+        hint("• 지정한 앱에 들어올 때마다 위에서 켜 둔 기능(1·2·3) 버튼이 자동으로 나타납니다.\n• 다른 앱이나 홈 화면으로 나가면 버튼이 사라지고, 실행 중이던 자동 터치·자동 스크롤도 멈춥니다.\n• 이 설정 화면을 열 때는 버튼이 그대로 보입니다(크기·투명도 확인용).")
 
         // ================= 아래: 세부 설정 =================
         section("사용법")
         hint(
             "• 플로팅 버튼은 드래그해서 옮길 수 있습니다.\n" +
                 "• 화면 왼쪽/오른쪽 끝까지 끌어다 놓으면 엣지에 숨겨집니다. 숨겨진 버튼을 탭하면 다시 나타납니다.\n" +
-                "• 서비스는 한 번만 켜두면 됩니다. 버튼을 치울 땐 서비스를 끄지 말고 위의 「모두 끄기」나 알림을 쓰세요.\n" +
+                "• 서비스는 한 번만 켜두면 됩니다. 버튼을 치울 땐 서비스를 끄지 말고 위의 「모두 끄기」를 쓰세요.\n" +
                 "• 빠른 설정(상단바)에 「플로팅 버튼」 타일을 추가하면 전체 보이기/숨기기도 됩니다."
         )
 
@@ -401,6 +410,41 @@ class MainActivity : Activity() {
             })
         }
         root.addView(box, LinearLayout.LayoutParams(MATCH_PARENT, dp(heightDp)).apply { bottomMargin = dp(10) })
+    }
+
+    private fun appLabel(pkg: String): String = runCatching {
+        packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString()
+    }.getOrDefault(pkg)
+
+    /** 설치된 앱(런처에 보이는 앱) 목록에서 여러 개 선택 */
+    private fun pickApps() {
+        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val selected = prefs.targetApps.toMutableSet()
+        val all = packageManager.queryIntentActivities(intent, 0)
+            .map { it.activityInfo.packageName }
+            .filter { it != packageName }
+            .distinct()
+            .map { it to appLabel(it) }
+            // 선택된 앱을 위에, 나머지는 이름순
+            .sortedWith(compareBy<Pair<String, String>>({ it.first !in selected }, { it.second.lowercase() }))
+        val labels = all.map { it.second }.toTypedArray()
+        val checked = all.map { it.first in selected }.toBooleanArray()
+        android.app.AlertDialog.Builder(this)
+            .setTitle("버튼을 보여줄 앱 선택")
+            .setMultiChoiceItems(labels, checked) { _, i, isChecked ->
+                if (isChecked) selected += all[i].first else selected -= all[i].first
+            }
+            .setPositiveButton("저장") { _, _ ->
+                prefs.targetApps = selected
+                if (selected.isNotEmpty() && !prefs.appModeEnabled) {
+                    prefs.appModeEnabled = true
+                    toast("앱 지정 모드를 켰습니다")
+                }
+                if (selected.isEmpty()) prefs.appModeEnabled = false
+                apply(); refresh()
+            }
+            .setNegativeButton("취소", null)
+            .show()
     }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()

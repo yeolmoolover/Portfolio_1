@@ -5,7 +5,7 @@ import android.content.Context
 enum class Feature { SCROLL, TAP, AUTO }
 
 /**
- * 기능 1·2·3 켜기/끄기 공통 로직. 앱 화면, 알림표시줄, 서비스가 모두 이것을 쓴다.
+ * 기능 1·2·3 켜기/끄기 공통 로직. 앱 화면, 빠른 설정 타일, 서비스가 모두 이것을 쓴다.
  * "켜짐" = 플로팅 버튼이 실제로 화면에 보이는 상태 (전체 보이기 && 해당 기능 활성).
  */
 object Controls {
