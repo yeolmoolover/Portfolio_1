@@ -42,6 +42,15 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("scroll_enabled", true)
         set(v) = sp.edit().putBoolean("scroll_enabled", v).apply()
 
+    var autoEnabled: Boolean
+        get() = sp.getBoolean("auto_enabled", true)
+        set(v) = sp.edit().putBoolean("auto_enabled", v).apply()
+
+    /** 자동 스크롤 속도 (dp/초) */
+    var autoSpeedDp: Int
+        get() = sp.getInt("auto_speed", DEFAULT_AUTO_SPEED).coerceIn(MIN_AUTO_SPEED, MAX_AUTO_SPEED)
+        set(v) = sp.edit().putInt("auto_speed", v.coerceIn(MIN_AUTO_SPEED, MAX_AUTO_SPEED)).apply()
+
     var tapEnabled: Boolean
         get() = sp.getBoolean("tap_enabled", true)
         set(v) = sp.edit().putBoolean("tap_enabled", v).apply()
@@ -81,6 +90,11 @@ class Prefs(context: Context) {
         const val KEY_SCROLL = "scroll"
         const val KEY_TAP = "tap"
         const val KEY_TARGET = "target"
+        const val KEY_AUTO = "auto"
+
+        const val MIN_AUTO_SPEED = 5        // dp/초
+        const val MAX_AUTO_SPEED = 800
+        const val DEFAULT_AUTO_SPEED = 60
 
         const val MIN_SCROLL_MS = 1L        // 0.001초
         const val MAX_SCROLL_MS = 10_000L   // 10초

@@ -14,8 +14,8 @@ import android.widget.RemoteViews
 
 /**
  * 알림표시줄에 상주하는 컨트롤 알림.
- *  [1 스크롤]  [2 자동터치]  [끄기]
- * 1·2 버튼은 각각 켜기/끄기 토글, 끄기는 모든 플로팅 버튼 숨김.
+ *  [1 빠른넘김]  [2 자동터치]  [3 자동스크롤]  [끄기]
+ * 1·2·3 버튼은 각각 켜기/끄기 토글, 끄기는 모든 플로팅 버튼 숨김.
  * 접근성 서비스가 켜져 있는 동안만 표시된다.
  */
 object ControlNotification {
@@ -24,12 +24,9 @@ object ControlNotification {
 
     const val ACTION_SCROLL = "com.portfolio.floatingtouch.SCROLL"
     const val ACTION_TAP = "com.portfolio.floatingtouch.TAP"
+    const val ACTION_AUTO = "com.portfolio.floatingtouch.AUTO"
     const val ACTION_OFF = "com.portfolio.floatingtouch.OFF"
     const val ACTION_REPOST = "com.portfolio.floatingtouch.REPOST"
-
-    /** 현재 실제로 화면에 보이는지 */
-    fun scrollOn(p: Prefs) = p.overlayVisible && p.scrollEnabled
-    fun tapOn(p: Prefs) = p.overlayVisible && p.tapEnabled
 
     fun canPost(context: Context): Boolean =
         Build.VERSION.SDK_INT < 33 ||
@@ -50,22 +47,20 @@ object ControlNotification {
             )
         }
 
-        val sOn = scrollOn(prefs)
-        val tOn = tapOn(prefs)
         val rv = RemoteViews(context.packageName, R.layout.notification_controls).apply {
-            setTextViewText(R.id.btn_scroll, (if (prefs.scrollDown) "▼" else "▲") + " 1 스크롤")
-            setInt(R.id.btn_scroll, "setBackgroundResource",
-                if (sOn) R.drawable.notif_btn_scroll_on else R.drawable.notif_btn_off)
-            setTextColor(R.id.btn_scroll, if (sOn) 0xFFFFFFFF.toInt() else 0xFF424242.toInt())
-
-            setInt(R.id.btn_tap, "setBackgroundResource",
-                if (tOn) R.drawable.notif_btn_tap_on else R.drawable.notif_btn_off)
-            setTextColor(R.id.btn_tap, if (tOn) 0xFFFFFFFF.toInt() else 0xFF424242.toInt())
-
+            fun style(id: Int, on: Boolean, onBg: Int) {
+                setInt(id, "setBackgroundResource", if (on) onBg else R.drawable.notif_btn_off)
+                setTextColor(id, if (on) 0xFFFFFFFF.toInt() else 0xFF424242.toInt())
+            }
+            setTextViewText(R.id.btn_scroll, (if (prefs.scrollDown) "1 ▼" else "1 ▲") + "\n빠른넘김")
+            style(R.id.btn_scroll, Controls.isOn(prefs, Feature.SCROLL), R.drawable.notif_btn_scroll_on)
+            style(R.id.btn_tap, Controls.isOn(prefs, Feature.TAP), R.drawable.notif_btn_tap_on)
+            style(R.id.btn_auto, Controls.isOn(prefs, Feature.AUTO), R.drawable.notif_btn_auto_on)
             setTextColor(R.id.btn_off, 0xFF424242.toInt())
 
             setOnClickPendingIntent(R.id.btn_scroll, broadcast(context, ACTION_SCROLL, 1))
             setOnClickPendingIntent(R.id.btn_tap, broadcast(context, ACTION_TAP, 2))
+            setOnClickPendingIntent(R.id.btn_auto, broadcast(context, ACTION_AUTO, 5))
             setOnClickPendingIntent(R.id.btn_off, broadcast(context, ACTION_OFF, 3))
         }
 

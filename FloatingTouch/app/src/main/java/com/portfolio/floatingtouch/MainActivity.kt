@@ -22,7 +22,6 @@ import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.SeekBar
-import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import java.util.Locale
@@ -37,9 +36,6 @@ class MainActivity : Activity() {
     private lateinit var prefs: Prefs
     private lateinit var statusText: TextView
     private lateinit var root: LinearLayout
-    @Suppress("DEPRECATION")
-    private lateinit var visibleSwitch: Switch
-    private var syncingSwitch = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,9 +54,15 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         // 알림/타일/길게 누르기로 바뀐 상태를 반영하려고 화면을 다시 그린다
+        refresh()
+    }
+
+    private fun refresh() {
+        val scrollY = (root.parent as? ScrollView)?.scrollY ?: 0
         root.removeAllViews()
         buildUi()
         updateStatus()
+        (root.parent as? ScrollView)?.post { (root.parent as ScrollView).scrollTo(0, scrollY) }
     }
 
     override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, results: IntArray) {
@@ -80,61 +82,50 @@ class MainActivity : Activity() {
 
     private fun updateStatus() {
         val on = FloatingService.instance != null
-        statusText.text = if (on) "● 서비스 실행 중 — 플로팅 버튼이 화면에 표시됩니다"
-        else "○ 서비스 꺼짐 — 아래 '접근성 설정 열기'에서 「${getString(R.string.service_label)}」을 켜주세요"
+        statusText.text = if (on) "● 서비스 실행 중 — 아래 버튼을 눌러 기능을 켜고 끄세요"
+        else "○ 서비스 꺼짐 — 접근성 설정에서 「${getString(R.string.service_label)}」을 켜주세요"
         statusText.setTextColor(if (on) 0xFF2E7D32.toInt() else 0xFFC62828.toInt())
-        // 길게 누르기/타일로 바뀐 상태를 반영 (리스너는 실행하지 않음)
-        syncingSwitch = true
-        visibleSwitch.isChecked = prefs.overlayVisible
-        syncingSwitch = false
     }
 
     // ---------------------------------------------------------------- UI
 
     private fun buildUi() {
-        title("플로팅 터치", 22f)
-        statusText = TextView(this).apply { textSize = 14f; setPadding(0, dp(8), 0, dp(8)) }
+        val serviceOn = FloatingService.instance != null
+
+        // ================= 최상단: 기능 켜기/끄기 (가장 크게) =================
+        root.addView(TextView(this).apply {
+            text = "플로팅 터치"; textSize = 15f; setTextColor(0xFF757575.toInt())
+        })
+        title("기능 켜기 / 끄기", 26f)
+        statusText = TextView(this).apply { textSize = 14f; setPadding(0, dp(4), 0, dp(10)) }
         root.addView(statusText)
 
-        button("접근성 설정 열기") {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        if (!serviceOn) {
+            bigButton(
+                "⚠  먼저 접근성 서비스를 켜주세요", "탭하면 접근성 설정으로 이동합니다 (최초 1회)",
+                0xFFC62828.toInt(), true
+            ) { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
         }
-        button("앱 정보 열기 (Android 13+ '제한된 설정 허용' 필요 시)") {
-            startActivity(
-                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
-            )
-        }
-        button("버튼 위치 초기화") {
-            FloatingService.instance?.resetPositions()
-                ?: run {
-                    listOf(Prefs.KEY_SCROLL, Prefs.KEY_TAP, Prefs.KEY_TARGET).forEach(prefs::resetPosition)
-                }
-        }
-        visibleSwitch = Switch(this).apply {
-            text = "플로팅 버튼 보이기"; textSize = 16f; typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, dp(12), 0, dp(12))
-            setOnCheckedChangeListener { _, c ->
-                if (syncingSwitch) return@setOnCheckedChangeListener
-                if (FloatingService.instance != null) FloatingService.instance?.setOverlayVisible(c)
-                else prefs.overlayVisible = c
-            }
-        }
-        root.addView(visibleSwitch)
 
+        featureToggle(Feature.SCROLL, "1", "빠른 넘김", "누를 때마다 한 페이지씩 넘김", 0xFF1E88E5.toInt())
+        featureToggle(Feature.TAP, "2", "자동 터치", "지정한 위치를 반복 터치", 0xFFE53935.toInt())
+        featureToggle(Feature.AUTO, "3", "자동 스크롤", "천천히 계속 스크롤 (속도 조절)", 0xFF8E24AA.toInt())
+        bigButton("✕  모두 끄기", null, 0xFF616161.toInt(), false, heightDp = 56) {
+            Controls.allOff(this); refresh()
+        }
+        hint("알림표시줄의 「플로팅 터치」 알림에서도 [1] [2] [3] [끄기]로 바로 켜고 끌 수 있습니다. 플로팅 버튼을 길게 누르면 전부 숨겨집니다.")
+
+        // ================= 아래: 세부 설정 =================
+        section("사용법")
         hint(
-            "• 알림표시줄의 「플로팅 터치」 알림에서 [1 스크롤] [2 자동터치] [끄기] 로 바로 켜고 끌 수 있습니다.\n" +
-            "• 서비스는 한 번만 켜두면 됩니다. 버튼을 잠깐 치우고 싶을 땐 서비스를 끄지 말고 아래 방법을 쓰세요.\n" +
-                "   ① 플로팅 버튼을 길게 누르기 → 모든 플로팅 버튼 숨김\n" +
-                "   ② 상단바를 내려 빠른 설정의 「플로팅 버튼」 타일 탭 → 숨기기/보이기\n" +
-                "      (처음 한 번: 빠른 설정 편집(연필 아이콘)에서 타일을 끌어다 추가)\n" +
-                "   ③ 이 화면의 「플로팅 버튼 보이기」 스위치\n" +
-                "• 버튼을 드래그해서 옮길 수 있습니다.\n" +
-                "• 버튼을 화면 왼쪽/오른쪽 끝까지 끌어다 놓으면 엣지에 숨겨집니다. 숨겨진 버튼을 탭하면 다시 나타납니다."
+            "• 플로팅 버튼은 드래그해서 옮길 수 있습니다.\n" +
+                "• 화면 왼쪽/오른쪽 끝까지 끌어다 놓으면 엣지에 숨겨집니다. 숨겨진 버튼을 탭하면 다시 나타납니다.\n" +
+                "• 서비스는 한 번만 켜두면 됩니다. 버튼을 치울 땐 서비스를 끄지 말고 위의 「모두 끄기」나 알림을 쓰세요.\n" +
+                "• 빠른 설정(상단바)에 「플로팅 버튼」 타일을 추가하면 전체 보이기/숨기기도 됩니다."
         )
 
         // ======== 1. 빠른 스크롤 ========
         section("1. 빠른 스크롤 버튼 (파란색)")
-        switchRow("버튼 표시", prefs.scrollEnabled) { prefs.scrollEnabled = it; apply() }
 
         val durLabel = TextView(this).apply { textSize = 15f }
         val durInput = EditText(this).apply {
@@ -237,7 +228,6 @@ class MainActivity : Activity() {
         // ======== 2. 자동 반복 터치 ========
         section("2. 자동 반복 터치 버튼 (빨간색 ▶ / 실행 중 초록색 ■)")
         hint("빨간 조준점(⊕)을 원하는 위치로 끌어다 놓고 ▶ 버튼을 누르면 그 위치를 반복 터치합니다. 다시 누르면 정지합니다. 실행 중에는 조준점을 옮길 수 없습니다.")
-        switchRow("버튼 표시", prefs.tapEnabled) { prefs.tapEnabled = it; apply() }
         // 1.0 ~ 10.0초, 0.1초 단위
         seekRow(
             label = { "터치 간격: ${String.format(Locale.US, "%.1f", it / 10.0 + 1.0)}초" },
@@ -249,6 +239,52 @@ class MainActivity : Activity() {
         title("조준점(⊕) 표시", 15f)
         hint("조준점 크기·투명도는 보이는 모양만 바뀝니다. 실제 터치는 항상 조준점의 정중앙 한 점에 들어갑니다. 크기를 바꿔도 중심 위치는 유지됩니다.")
         styleRows(Prefs.KEY_TARGET, "조준점 크기")
+
+        // ======== 3. 자동 스크롤 ========
+        section("3. 자동 스크롤 버튼 (보라색 ↓ / 실행 중 ■)")
+        hint("↓ 버튼을 누르면 화면이 설정한 속도로 천천히 계속 아래로 스크롤됩니다. 다시 누르면 멈춥니다. 실행 중에 속도를 바꾸면 바로 반영됩니다.")
+        seekRow(
+            label = { v ->
+                val dpPerSec = Prefs.MIN_AUTO_SPEED + v * 5
+                val desc = when {
+                    dpPerSec < 40 -> "아주 느림"
+                    dpPerSec < 100 -> "느림"
+                    dpPerSec < 250 -> "보통"
+                    dpPerSec < 500 -> "빠름"
+                    else -> "아주 빠름"
+                }
+                "스크롤 속도: ${dpPerSec}dp/초 ($desc, 약 ${(dpPerSec * resources.displayMetrics.density).roundToInt()}px/초)"
+            },
+            max = (Prefs.MAX_AUTO_SPEED - Prefs.MIN_AUTO_SPEED) / 5,
+            initial = (prefs.autoSpeedDp - Prefs.MIN_AUTO_SPEED) / 5,
+        ) { prefs.autoSpeedDp = Prefs.MIN_AUTO_SPEED + it * 5 }
+        root.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            listOf(-10, -5, 5, 10).forEach { step ->
+                addView(Button(context).apply {
+                    text = if (step > 0) "+$step" else "$step"
+                    setOnClickListener { prefs.autoSpeedDp = prefs.autoSpeedDp + step; refresh() }
+                }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            }
+        })
+        hint("화면을 직접 만지거나, 1번·2번 기능이 동작하면 자동 스크롤이 잠깐(1초) 멈췄다가 다시 이어집니다. 화면 아래쪽 80% 지점부터 위쪽 20% 지점까지 끌어올린 뒤, 손을 뗐다가 다시 아래에서 시작하므로 그 순간 아주 짧게 멈칫할 수 있습니다.")
+        styleRows(Prefs.KEY_AUTO)
+
+        // ======== 기타 ========
+        section("기타")
+        button("접근성 설정 열기") {
+            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+        }
+        button("앱 정보 열기 (Android 13+ '제한된 설정 허용' 필요 시)") {
+            startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))
+            )
+        }
+        button("버튼 위치 초기화") {
+            FloatingService.instance?.resetPositions()
+                ?: listOf(Prefs.KEY_SCROLL, Prefs.KEY_TAP, Prefs.KEY_TARGET, Prefs.KEY_AUTO)
+                    .forEach(prefs::resetPosition)
+        }
 
         hint(
             "\n※ 참고: 0.001초처럼 아주 짧은 스와이프는 앱마다 다르게 해석될 수 있습니다 " +
@@ -304,15 +340,6 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
     }
 
-    @Suppress("DEPRECATION")
-    private fun switchRow(text: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-        root.addView(Switch(this).apply {
-            this.text = text; textSize = 15f; isChecked = checked
-            setPadding(0, dp(8), 0, dp(8))
-            setOnCheckedChangeListener { _, c -> onChange(c) }
-        })
-    }
-
     private fun seekRow(label: (Int) -> String, max: Int, initial: Int, onChange: (Int) -> Unit) {
         val tv = TextView(this).apply {
             textSize = 15f; text = label(initial.coerceIn(0, max)); setPadding(0, dp(8), 0, 0)
@@ -329,6 +356,51 @@ class MainActivity : Activity() {
         }
         root.addView(tv)
         root.addView(sb)
+    }
+
+    /** 큰 기능 토글 카드: 켜짐이면 기능 색으로 채움, 꺼짐이면 흰 바탕 + 색 테두리 */
+    private fun featureToggle(f: Feature, num: String, name: String, desc: String, color: Int) {
+        val on = Controls.isOn(prefs, f)
+        bigButton(
+            "$num   $name   ${if (on) "ON" else "OFF"}",
+            if (on) "켜짐 · 탭해서 끄기" else "$desc · 탭해서 켜기",
+            color, on,
+        ) {
+            Controls.toggle(this, f)
+            if (FloatingService.instance == null) toast("접근성 서비스를 켜야 화면에 버튼이 나타납니다")
+            refresh()
+        }
+    }
+
+    private fun bigButton(
+        title: String, sub: String?, color: Int, filled: Boolean,
+        heightDp: Int = 84, onClick: () -> Unit,
+    ) {
+        val bg = android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = dp(18).toFloat()
+            setColor(if (filled) color else Color.WHITE)
+            setStroke(dp(if (filled) 0 else 2), color)
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = bg
+            setPadding(dp(20), dp(8), dp(20), dp(8))
+            isClickable = true
+            isFocusable = true
+            foreground = obtainStyledAttributes(intArrayOf(android.R.attr.selectableItemBackground))
+                .let { a -> a.getDrawable(0).also { a.recycle() } }
+            setOnClickListener { onClick() }
+            addView(TextView(context).apply {
+                text = title; textSize = 21f; typeface = Typeface.DEFAULT_BOLD
+                setTextColor(if (filled) Color.WHITE else color)
+            })
+            if (sub != null) addView(TextView(context).apply {
+                text = sub; textSize = 13f
+                setTextColor(if (filled) 0xDDFFFFFF.toInt() else 0xFF616161.toInt())
+            })
+        }
+        root.addView(box, LinearLayout.LayoutParams(MATCH_PARENT, dp(heightDp)).apply { bottomMargin = dp(10) })
     }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()

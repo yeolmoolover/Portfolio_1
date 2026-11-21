@@ -7,6 +7,7 @@ import android.content.res.Configuration
 import android.graphics.Path
 import android.os.Handler
 import android.os.Looper
+import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.Toast
@@ -27,6 +28,13 @@ class FloatingService : AccessibilityService() {
         private const val TAP_PRESS_MS = 40L
         /** 오버레이를 터치 불가로 바꾼 뒤 입력 시스템에 반영될 때까지 기다리는 시간 */
         private const val TOUCHABLE_SETTLE_MS = 50L
+
+        /** 자동 스크롤: 한 구간(연속 드래그 조각) 길이 */
+        private const val AUTO_SEGMENT_MS = 200L
+        /** 자동 스크롤: 손 떼기 전 멈춤 (관성 방지) */
+        private const val AUTO_LIFT_HOLD_MS = 80L
+        /** 자동 스크롤: 사용자 터치 등으로 중단되면 이만큼 쉬었다가 재개 */
+        private const val AUTO_RESUME_DELAY_MS = 1000L
     }
 
     private lateinit var wm: WindowManager
@@ -39,6 +47,9 @@ class FloatingService : AccessibilityService() {
     private var tapView: CircleButtonView? = null
     private var markerItem: OverlayItem? = null
     private var markerView: TargetMarkerView? = null
+
+    private var autoItem: OverlayItem? = null
+    private var autoView: CircleButtonView? = null
 
     private var scrolling = false
     var tapping = false
@@ -67,10 +78,12 @@ class FloatingService : AccessibilityService() {
 
     private fun cleanup() {
         stopTapping()
+        stopAuto()
         handler.removeCallbacksAndMessages(null)
         scrollItem?.detach(); scrollItem = null; scrollView = null
         tapItem?.detach(); tapItem = null; tapView = null
         markerItem?.detach(); markerItem = null; markerView = null
+        autoItem?.detach(); autoItem = null; autoView = null
         instance = null
         ToggleTileService.refresh(this)
         ControlNotification.cancel(this)
@@ -82,6 +95,7 @@ class FloatingService : AccessibilityService() {
             scrollItem?.clampToScreen()
             tapItem?.clampToScreen()
             markerItem?.clampToScreen()
+            autoItem?.clampToScreen()
         }
     }
 
@@ -141,6 +155,24 @@ class FloatingService : AccessibilityService() {
             tapItem?.detach(); tapItem = null; tapView = null
             markerItem?.detach(); markerItem = null; markerView = null
         }
+
+        // ---- 3. 자동 스크롤 버튼 ----
+        if (visible && prefs.autoEnabled) {
+            if (autoItem == null) {
+                val v = CircleButtonView(this, 0xFF8E24AA.toInt(), 0xFF4A148C.toInt())
+                autoView = v
+                autoItem = OverlayItem(
+                    this, wm, prefs, Prefs.KEY_AUTO, v, edgeHide = true,
+                    onClick = { if (autoWanted) stopAuto() else startAuto() },
+                    onLongPress = { setOverlayVisible(false) },
+                ).also { it.attach(screen.x - dp(72), screen.y / 3 + dp(180)) }
+            }
+            autoView?.setLabel(if (autoWanted) "■" else "↓")
+            autoItem?.applyStyle(prefs.sizeDp(Prefs.KEY_AUTO), prefs.alpha(Prefs.KEY_AUTO))
+        } else {
+            stopAuto()
+            autoItem?.detach(); autoItem = null; autoView = null
+        }
     }
 
     /** 서비스는 켜 둔 채로 플로팅 버튼만 숨기기/보이기 */
@@ -156,30 +188,13 @@ class FloatingService : AccessibilityService() {
 
     /** 알림표시줄 버튼 처리 */
     fun handleControl(action: String) {
-        val sOn = ControlNotification.scrollOn(prefs)
-        val tOn = ControlNotification.tapOn(prefs)
         when (action) {
-            ControlNotification.ACTION_SCROLL -> {
-                prefs.scrollEnabled = !sOn
-                prefs.tapEnabled = tOn
-                prefs.overlayVisible = true
-            }
-            ControlNotification.ACTION_TAP -> {
-                prefs.tapEnabled = !tOn
-                prefs.scrollEnabled = sOn
-                prefs.overlayVisible = true
-            }
-            ControlNotification.ACTION_OFF -> prefs.overlayVisible = false
-            ControlNotification.ACTION_REPOST -> Unit
-            else -> return
+            ControlNotification.ACTION_SCROLL -> Controls.toggle(this, Feature.SCROLL)
+            ControlNotification.ACTION_TAP -> Controls.toggle(this, Feature.TAP)
+            ControlNotification.ACTION_AUTO -> Controls.toggle(this, Feature.AUTO)
+            ControlNotification.ACTION_OFF -> Controls.allOff(this)
+            ControlNotification.ACTION_REPOST -> applySettings()
         }
-        // 둘 다 꺼졌으면 '숨김' 상태로 정리 (타일/앱 스위치와 상태 일치)
-        if (!prefs.scrollEnabled && !prefs.tapEnabled) {
-            prefs.overlayVisible = false
-            prefs.scrollEnabled = true
-            prefs.tapEnabled = true
-        }
-        applySettings()
     }
 
     fun resetPositions() {
@@ -187,6 +202,7 @@ class FloatingService : AccessibilityService() {
         scrollItem?.resetPosition(screen.x - dp(72), screen.y / 3)
         tapItem?.resetPosition(screen.x - dp(72), screen.y / 3 + dp(90))
         markerItem?.resetPosition(screen.x / 2 - dp(24), screen.y / 2 - dp(24))
+        autoItem?.resetPosition(screen.x - dp(72), screen.y / 3 + dp(180))
     }
 
     // ===================== 1. 빠른 스크롤 =====================
@@ -248,6 +264,7 @@ class FloatingService : AccessibilityService() {
     private fun setAllTouchable(touchable: Boolean) {
         scrollItem?.setTouchable(touchable)
         tapItem?.setTouchable(touchable)
+        autoItem?.setTouchable(touchable)
         // 조준점은 자동 터치 실행 중에는 항상 터치 불가 상태를 유지해야 한다
         markerItem?.setTouchable(touchable && !tapping)
     }
@@ -296,5 +313,111 @@ class FloatingService : AccessibilityService() {
             .addStroke(GestureDescription.StrokeDescription(path, 0, TAP_PRESS_MS))
             .build()
         dispatchGesture(gesture, null, null)
+    }
+
+    // ===================== 3. 자동 스크롤 =====================
+    //
+    // 손가락 하나를 화면에 대고 일정 속도로 천천히 끌어올리는 것을 흉내 낸다.
+    //  - 200ms 짜리 드래그 조각을 continueStroke 로 계속 이어 붙인다 (손가락을 떼지 않음)
+    //  - 화면 위쪽 한계에 닿으면 잠깐 멈췄다 떼고(관성 없음), 아래에서 다시 시작
+    //  - 속도는 조각마다 새로 읽으므로 실행 중에 바꿔도 바로 반영된다
+
+    /** 사용자가 원하는 상태 (버튼 ■ 표시) */
+    private var autoWanted = false
+    /** 주입 중인 손가락이 화면에 닿아 있는지 */
+    private var autoFingerDown = false
+    private var autoX = 0f
+    private var autoY = 0f
+    private var autoTopLimit = 0f
+
+    private val autoResume = Runnable { if (autoWanted && !autoFingerDown) beginAutoStroke() }
+
+    fun startAuto() {
+        autoWanted = true
+        autoView?.setActive(true)
+        autoView?.setLabel("■")
+        if (!autoFingerDown) beginAutoStroke()
+        Toast.makeText(this, "자동 스크롤 시작 (${prefs.autoSpeedDp}dp/초)", Toast.LENGTH_SHORT).show()
+    }
+
+    /** 멈춤. 손가락은 진행 중인 조각이 끝날 때(최대 0.2초) 멈춤-떼기로 처리된다. */
+    fun stopAuto() {
+        autoWanted = false
+        handler.removeCallbacks(autoResume)
+        autoView?.setActive(false)
+        autoView?.setLabel("↓")
+    }
+
+    private fun beginAutoStroke() {
+        if (!autoWanted || autoFingerDown) return
+        val s = ScreenUtil.size(wm)
+        autoX = s.x / 2f
+        val startY = s.y * 0.8f
+        autoTopLimit = s.y * 0.2f
+        // 첫 움직임은 '터치 슬롭'을 바로 넘겨서, 너무 느린 속도에서 길게 누르기로 인식되는 것을 막는다
+        val kick = ViewConfiguration.get(this).scaledTouchSlop + 2f
+        autoY = startY - kick
+        val path = Path().apply { moveTo(autoX, startY); lineTo(autoX, autoY) }
+        val stroke = GestureDescription.StrokeDescription(path, 0, 40, true)
+
+        autoFingerDown = true
+        // 시작 지점이 플로팅 버튼 위면 버튼이 터치를 가로채므로 시작 순간만 잠시 터치 불가
+        setAllTouchable(false)
+        handler.postDelayed({
+            val ok = dispatchGesture(
+                GestureDescription.Builder().addStroke(stroke).build(), autoCallback(stroke), null
+            )
+            handler.postDelayed({ if (!scrolling) setAllTouchable(true) }, 60)
+            if (!ok) onAutoCancelled()
+        }, TOUCHABLE_SETTLE_MS)
+    }
+
+    private fun autoCallback(stroke: GestureDescription.StrokeDescription) =
+        object : GestureResultCallback() {
+            override fun onCompleted(g: GestureDescription?) = continueAuto(stroke)
+            override fun onCancelled(g: GestureDescription?) = onAutoCancelled()
+        }
+
+    private fun continueAuto(prev: GestureDescription.StrokeDescription) {
+        val pxPerSec = prefs.autoSpeedDp * resources.displayMetrics.density
+        val step = (pxPerSec * AUTO_SEGMENT_MS / 1000f).coerceAtLeast(1f)
+        if (!autoWanted || autoY - step < autoTopLimit) {
+            liftAuto(prev)
+            return
+        }
+        val newY = autoY - step
+        val path = Path().apply { moveTo(autoX, autoY); lineTo(autoX, newY) }
+        autoY = newY
+        val next = prev.continueStroke(path, 0, AUTO_SEGMENT_MS, true)
+        val ok = dispatchGesture(
+            GestureDescription.Builder().addStroke(next).build(), autoCallback(next), null
+        )
+        if (!ok) onAutoCancelled()
+    }
+
+    /** 제자리에서 잠깐 멈췄다가 손을 뗀다 → 앱이 속도 0으로 판단, 미끄러짐 없음 */
+    private fun liftAuto(prev: GestureDescription.StrokeDescription) {
+        val hold = prev.continueStroke(Path().apply { moveTo(autoX, autoY) }, 0, AUTO_LIFT_HOLD_MS, false)
+        val ok = dispatchGesture(
+            GestureDescription.Builder().addStroke(hold).build(),
+            object : GestureResultCallback() {
+                override fun onCompleted(g: GestureDescription?) {
+                    autoFingerDown = false
+                    if (autoWanted) beginAutoStroke()  // 아래에서 다시 시작
+                }
+                override fun onCancelled(g: GestureDescription?) = onAutoCancelled()
+            }, null
+        )
+        if (!ok) onAutoCancelled()
+    }
+
+    /**
+     * 사용자가 화면을 만지거나 다른 기능(빠른 넘김/자동 터치)이 제스처를 보내면 진행 중 제스처가 취소된다.
+     * 그때는 1초 쉬었다가 아래에서 다시 시작한다.
+     */
+    private fun onAutoCancelled() {
+        autoFingerDown = false
+        handler.removeCallbacks(autoResume)
+        if (autoWanted) handler.postDelayed(autoResume, AUTO_RESUME_DELAY_MS)
     }
 }
