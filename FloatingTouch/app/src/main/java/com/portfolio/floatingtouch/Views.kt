@@ -41,15 +41,24 @@ class FloatButtonView(
         updateColor()
     }
 
-    /** 누르는 동안 아주 살짝 어둡게 (크기는 그대로) */
+    /** 눌린 순간 0.1초만 아주 살짝 어둡게 (누르고 있거나 드래그하는 동안은 원래 색) */
+    private var dimmed = false
+    private val undim = Runnable { dimmed = false; updateColor() }
+
     override fun setPressed(pressed: Boolean) {
+        val wasPressed = isPressed
         super.setPressed(pressed)
+        if (pressed && !wasPressed) {
+            dimmed = true
+            removeCallbacks(undim)
+            postDelayed(undim, PRESS_FLASH_MS)
+        }
         updateColor()
     }
 
     private fun updateColor() {
         val c = if (active) activeColor else baseColor
-        bg.setColor(if (isPressed) darken(c, PRESS_DIM) else c)
+        bg.setColor(if (dimmed) darken(c, PRESS_DIM) else c)
     }
 
     private fun darken(color: Int, amount: Float): Int {
@@ -69,6 +78,7 @@ class FloatButtonView(
         const val GRAY_ACTIVE = 0xFF2B2D30.toInt()   // 실행 중: 진한 회색
         const val GRAY_OFF = 0xFFB4B8BD.toInt()      // 빠른 메뉴에서 '꺼짐'
         const val PRESS_DIM = 0.12f                  // 눌렀을 때 12% 어둡게
+        const val PRESS_FLASH_MS = 100L              // 어두운 상태 유지 시간 (0.1초)
     }
 }
 
