@@ -51,6 +51,7 @@ class FloatingService : AccessibilityService() {
     private var markerView: TargetMarkerView? = null
 
     private var miniItem: OverlayItem? = null
+    private val miniMenu by lazy { MiniMenu(this, wm, prefs) { openApp() } }
     private var autoItem: OverlayItem? = null
     private var autoView: CircleButtonView? = null
 
@@ -150,6 +151,7 @@ class FloatingService : AccessibilityService() {
 
     /** 플로팅 버튼 길게 누르기 → 설정 앱 열기 */
     private fun openApp() {
+        miniMenu.close(immediate = true)
         stopTapping()
         stopAuto()
         startActivity(
@@ -177,6 +179,7 @@ class FloatingService : AccessibilityService() {
         tapItem?.detach(); tapItem = null; tapView = null
         markerItem?.detach(); markerItem = null; markerView = null
         autoItem?.detach(); autoItem = null; autoView = null
+        if (::wm.isInitialized) miniMenu.close(immediate = true)
         miniItem?.detach(); miniItem = null
         instance = null
         ToggleTileService.refresh(this)
@@ -267,21 +270,25 @@ class FloatingService : AccessibilityService() {
             autoItem?.detach(); autoItem = null; autoView = null
         }
 
-        // ---- 작은 '앱 열기' 버튼: 앱 지정 모드 + 지정 앱 안 + 켜진 기능이 하나도 없을 때 ----
-        val showMini = prefs.appModeEnabled && isInTargetApp() &&
-            scrollItem == null && tapItem == null && autoItem == null
+        // ---- ☰ 메뉴 버튼: 앱 지정 모드에서 지정 앱 안에 있으면 항상 표시 ----
+        val showMini = prefs.appModeEnabled && isInTargetApp()
         if (showMini) {
             if (miniItem == null) {
                 val v = CircleButtonView(this, 0xFF00897B.toInt(), 0xFF004D40.toInt())
                 v.setLabel("☰")
                 miniItem = OverlayItem(
                     this, wm, prefs, Prefs.KEY_MINI, v, edgeHide = true,
-                    onClick = { openApp() },
+                    onClick = {
+                        miniItem?.centerOnScreen()?.let { (x, y) -> miniMenu.toggle(x, y) }
+                    },
                     onLongPress = { openApp() },
-                ).also { it.attach(screen.x - dp(56), screen.y / 3) }
+                    onDragStart = { miniMenu.close(immediate = true) },
+                ).also { it.attach(screen.x - dp(52), (screen.y * 0.6f).roundToInt()) }
             }
             miniItem?.applyStyle(prefs.sizeDp(Prefs.KEY_MINI), prefs.alpha(Prefs.KEY_MINI))
+            miniMenu.refreshStates()
         } else {
+            miniMenu.close(immediate = true)
             miniItem?.detach(); miniItem = null
         }
     }
@@ -303,7 +310,7 @@ class FloatingService : AccessibilityService() {
         tapItem?.resetPosition(screen.x - dp(72), screen.y / 3 + dp(90))
         markerItem?.resetPosition(screen.x / 2 - dp(24), screen.y / 2 - dp(24))
         autoItem?.resetPosition(screen.x - dp(72), screen.y / 3 + dp(180))
-        miniItem?.resetPosition(screen.x - dp(56), screen.y / 3)
+        miniItem?.resetPosition(screen.x - dp(52), (screen.y * 0.6f).roundToInt())
     }
 
     // ===================== 1. 빠른 스크롤 =====================

@@ -25,6 +25,7 @@ class OverlayItem(
     private val edgeHide: Boolean,
     private val onClick: () -> Unit,
     private val onLongPress: (() -> Unit)? = null,
+    private val onDragStart: (() -> Unit)? = null,
 ) {
     private val longPressHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var longPressed = false
@@ -192,6 +193,7 @@ class OverlayItem(
                     if (draggable && !dragging && hypot(dx, dy) > touchSlop) {
                         dragging = true
                         longPressHandler.removeCallbacks(longPressRunnable)
+                        onDragStart?.invoke()
                         if (hiddenSide != 0) {
                             hiddenSide = 0
                             applyAlpha()
