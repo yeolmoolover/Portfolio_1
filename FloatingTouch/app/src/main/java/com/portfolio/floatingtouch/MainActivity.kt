@@ -1,6 +1,8 @@
 package com.portfolio.floatingtouch
 
+import android.Manifest
 import android.app.Activity
+import android.os.Build
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
@@ -47,12 +49,30 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(16), dp(16), dp(32))
         }
         setContentView(ScrollView(this).apply { addView(root) })
-        buildUi()
+        // Android 13+ : 알림표시줄 컨트롤을 띄우려면 알림 권한 필요
+        if (Build.VERSION.SDK_INT >= 33 && !ControlNotification.canPost(this)) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIF)
+        }
     }
 
     override fun onResume() {
         super.onResume()
+        // 알림/타일/길게 누르기로 바뀐 상태를 반영하려고 화면을 다시 그린다
+        root.removeAllViews()
+        buildUi()
         updateStatus()
+    }
+
+    override fun onRequestPermissionsResult(code: Int, perms: Array<out String>, results: IntArray) {
+        super.onRequestPermissionsResult(code, perms, results)
+        if (code == REQ_NOTIF) {
+            FloatingService.instance?.applySettings()  // 권한 받은 즉시 알림 표시
+            if (!ControlNotification.canPost(this)) toast("알림 권한이 없으면 알림표시줄 컨트롤이 표시되지 않습니다")
+        }
+    }
+
+    companion object {
+        private const val REQ_NOTIF = 10
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).roundToInt()
@@ -102,6 +122,7 @@ class MainActivity : Activity() {
         root.addView(visibleSwitch)
 
         hint(
+            "• 알림표시줄의 「플로팅 터치」 알림에서 [1 스크롤] [2 자동터치] [끄기] 로 바로 켜고 끌 수 있습니다.\n" +
             "• 서비스는 한 번만 켜두면 됩니다. 버튼을 잠깐 치우고 싶을 땐 서비스를 끄지 말고 아래 방법을 쓰세요.\n" +
                 "   ① 플로팅 버튼을 길게 누르기 → 모든 플로팅 버튼 숨김\n" +
                 "   ② 상단바를 내려 빠른 설정의 「플로팅 버튼」 타일 탭 → 숨기기/보이기\n" +
@@ -225,6 +246,10 @@ class MainActivity : Activity() {
         ) { prefs.tapIntervalMs = 1000L + it * 100L }
         styleRows(Prefs.KEY_TAP)
 
+        title("조준점(⊕) 표시", 15f)
+        hint("조준점 크기·투명도는 보이는 모양만 바뀝니다. 실제 터치는 항상 조준점의 정중앙 한 점에 들어갑니다. 크기를 바꿔도 중심 위치는 유지됩니다.")
+        styleRows(Prefs.KEY_TARGET, "조준점 크기")
+
         hint(
             "\n※ 참고: 0.001초처럼 아주 짧은 스와이프는 앱마다 다르게 해석될 수 있습니다 " +
                 "(일부 앱은 아주 빠른 플링으로, 일부 앱은 무시하거나 탭으로 처리). " +
@@ -234,12 +259,13 @@ class MainActivity : Activity() {
     }
 
     /** 크기 / 투명도 슬라이더 */
-    private fun styleRows(key: String) {
+    private fun styleRows(key: String, sizeTitle: String = "버튼 크기") {
+        val min = Prefs.minSize(key)
         seekRow(
-            label = { "버튼 크기: ${it + Prefs.MIN_SIZE_DP}dp" },
-            max = Prefs.MAX_SIZE_DP - Prefs.MIN_SIZE_DP,
-            initial = prefs.sizeDp(key) - Prefs.MIN_SIZE_DP,
-        ) { prefs.setSizeDp(key, it + Prefs.MIN_SIZE_DP); apply() }
+            label = { "$sizeTitle: ${it + min}dp" },
+            max = Prefs.MAX_SIZE_DP - min,
+            initial = prefs.sizeDp(key) - min,
+        ) { prefs.setSizeDp(key, it + min); apply() }
         seekRow(
             label = { "불투명도: ${it + 20}%" },
             max = 80,

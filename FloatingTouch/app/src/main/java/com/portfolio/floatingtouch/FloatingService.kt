@@ -73,6 +73,7 @@ class FloatingService : AccessibilityService() {
         markerItem?.detach(); markerItem = null; markerView = null
         instance = null
         ToggleTileService.refresh(this)
+        ControlNotification.cancel(this)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
@@ -91,6 +92,7 @@ class FloatingService : AccessibilityService() {
         val screen = ScreenUtil.size(wm)
         val visible = prefs.overlayVisible
         ToggleTileService.refresh(this)
+        ControlNotification.show(this, prefs)
 
         // ---- 1. 빠른 스크롤 버튼 ----
         if (visible && prefs.scrollEnabled) {
@@ -116,7 +118,7 @@ class FloatingService : AccessibilityService() {
                 markerView = mv
                 markerItem = OverlayItem(this, wm, prefs, Prefs.KEY_TARGET, mv, edgeHide = false, onClick = {})
                     .also {
-                        it.applyStyle(48, 1f)
+                        it.applyStyle(prefs.sizeDp(Prefs.KEY_TARGET), prefs.alpha(Prefs.KEY_TARGET))
                         it.attach(screen.x / 2 - dp(24), screen.y / 2 - dp(24))
                     }
             }
@@ -131,6 +133,9 @@ class FloatingService : AccessibilityService() {
             }
             tapView?.setLabel(if (tapping) "■" else "▶")
             tapItem?.applyStyle(prefs.sizeDp(Prefs.KEY_TAP), prefs.alpha(Prefs.KEY_TAP))
+            markerItem?.applyStyle(
+                prefs.sizeDp(Prefs.KEY_TARGET), prefs.alpha(Prefs.KEY_TARGET), keepCenter = true
+            )
         } else {
             stopTapping()
             tapItem?.detach(); tapItem = null; tapView = null
@@ -144,9 +149,37 @@ class FloatingService : AccessibilityService() {
         applySettings()
         if (!visible) {
             Toast.makeText(
-                this, "플로팅 버튼 숨김 — 빠른 설정 타일이나 앱에서 다시 켤 수 있어요", Toast.LENGTH_SHORT
+                this, "플로팅 버튼 숨김 — 알림표시줄이나 빠른 설정 타일에서 다시 켤 수 있어요", Toast.LENGTH_SHORT
             ).show()
         }
+    }
+
+    /** 알림표시줄 버튼 처리 */
+    fun handleControl(action: String) {
+        val sOn = ControlNotification.scrollOn(prefs)
+        val tOn = ControlNotification.tapOn(prefs)
+        when (action) {
+            ControlNotification.ACTION_SCROLL -> {
+                prefs.scrollEnabled = !sOn
+                prefs.tapEnabled = tOn
+                prefs.overlayVisible = true
+            }
+            ControlNotification.ACTION_TAP -> {
+                prefs.tapEnabled = !tOn
+                prefs.scrollEnabled = sOn
+                prefs.overlayVisible = true
+            }
+            ControlNotification.ACTION_OFF -> prefs.overlayVisible = false
+            ControlNotification.ACTION_REPOST -> Unit
+            else -> return
+        }
+        // 둘 다 꺼졌으면 '숨김' 상태로 정리 (타일/앱 스위치와 상태 일치)
+        if (!prefs.scrollEnabled && !prefs.tapEnabled) {
+            prefs.overlayVisible = false
+            prefs.scrollEnabled = true
+            prefs.tapEnabled = true
+        }
+        applySettings()
     }
 
     fun resetPositions() {

@@ -47,14 +47,14 @@ class Prefs(context: Context) {
         set(v) = sp.edit().putBoolean("tap_enabled", v).apply()
 
     fun sizeDp(key: String): Int =
-        sp.getInt("${key}_size", DEFAULT_SIZE_DP).coerceIn(MIN_SIZE_DP, MAX_SIZE_DP)
+        sp.getInt("${key}_size", defaultSize(key)).coerceIn(minSize(key), MAX_SIZE_DP)
 
     fun setSizeDp(key: String, v: Int) =
-        sp.edit().putInt("${key}_size", v.coerceIn(MIN_SIZE_DP, MAX_SIZE_DP)).apply()
+        sp.edit().putInt("${key}_size", v.coerceIn(minSize(key), MAX_SIZE_DP)).apply()
 
     /** 0.2 ~ 1.0 */
     fun alpha(key: String): Float =
-        sp.getFloat("${key}_alpha", DEFAULT_ALPHA).coerceIn(MIN_ALPHA, 1f)
+        sp.getFloat("${key}_alpha", if (key == KEY_TARGET) 0.9f else DEFAULT_ALPHA).coerceIn(MIN_ALPHA, 1f)
 
     fun setAlpha(key: String, v: Float) =
         sp.edit().putFloat("${key}_alpha", v.coerceIn(MIN_ALPHA, 1f)).apply()
@@ -93,6 +93,11 @@ class Prefs(context: Context) {
         const val MAX_TAP_MS = 10_000L      // 10초
 
         const val MIN_SIZE_DP = 32
+        /** 조준점은 화면을 덜 가리도록 더 작게 줄일 수 있게 */
+        const val MIN_TARGET_SIZE_DP = 16
+
+        fun minSize(key: String) = if (key == KEY_TARGET) MIN_TARGET_SIZE_DP else MIN_SIZE_DP
+        fun defaultSize(key: String) = if (key == KEY_TARGET) 48 else DEFAULT_SIZE_DP
         const val MAX_SIZE_DP = 120
         const val DEFAULT_SIZE_DP = 56
         const val MIN_ALPHA = 0.2f

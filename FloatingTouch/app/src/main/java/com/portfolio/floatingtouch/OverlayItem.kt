@@ -81,9 +81,20 @@ class OverlayItem(
         attached = false
     }
 
-    /** 크기(dp)와 투명도(0.2~1.0)를 적용 */
-    fun applyStyle(sizeDp: Int, alpha: Float) {
-        sizePx = (sizeDp * density).roundToInt()
+    /**
+     * 크기(dp)와 투명도(0.2~1.0)를 적용.
+     * keepCenter=true 면 크기가 바뀌어도 중심점(=조준점의 터치 위치)이 그대로 유지된다.
+     */
+    fun applyStyle(sizeDp: Int, alpha: Float, keepCenter: Boolean = false) {
+        val newSize = (sizeDp * density).roundToInt()
+        if (keepCenter && attached && hiddenSide == 0 && newSize != sizePx) {
+            val diff = (sizePx - newSize) / 2
+            params.x += diff
+            params.y += diff
+            sizePx = newSize
+            save()
+        }
+        sizePx = newSize
         this.alpha = alpha
         params.width = sizePx
         params.height = sizePx
