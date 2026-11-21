@@ -123,6 +123,15 @@ class MainActivity : Activity() {
         })
         button("앱 선택하기 (${apps.size}개 선택됨)") { pickApps() }
         hint("• 지정한 앱에 들어올 때마다 위에서 켜 둔 기능(1·2·3) 버튼이 자동으로 나타납니다.\n• 다른 앱이나 홈 화면으로 나가면 버튼이 사라지고, 실행 중이던 자동 터치·자동 스크롤도 멈춥니다.\n• 이 설정 화면을 열 때는 버튼이 그대로 보입니다(크기·투명도 확인용).")
+        button("앱 감지 기록 보기 (문제 확인용)") {
+            val logText = FloatingService.instance?.detectLog?.joinToString("\n")
+                ?.ifEmpty { "아직 기록이 없습니다" } ?: "서비스가 꺼져 있습니다"
+            android.app.AlertDialog.Builder(this)
+                .setTitle("최근 감지 기록 (최신이 위)")
+                .setMessage("현재 앱: ${FloatingService.instance?.foregroundPackage ?: "-"}\n\n$logText")
+                .setPositiveButton("닫기", null)
+                .show()
+        }
 
         // ================= 아래: 세부 설정 =================
         section("사용법")

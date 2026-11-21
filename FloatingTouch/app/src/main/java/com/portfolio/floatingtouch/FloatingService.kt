@@ -80,26 +80,74 @@ class FloatingService : AccessibilityService() {
     private fun effectiveVisible(): Boolean =
         prefs.overlayVisible && (!prefs.appModeEnabled || isInTargetApp())
 
+    /** 설정 화면에 보여줄 최근 감지 기록 (문제 확인용) */
+    val detectLog = ArrayDeque<String>()
+    private val timeFmt = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+
+    private fun log(msg: String) {
+        detectLog.addFirst("${timeFmt.format(java.util.Date())}  $msg")
+        while (detectLog.size > 20) detectLog.removeLast()
+    }
+
+    /** 앱을 벗어난 것으로 판단한 뒤 실제로 숨기기까지의 유예 (잠깐 스쳐가는 창 무시) */
+    private val hideRunnable = Runnable { applySettings() }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
+        val cls = event.className?.toString()
+
+        // 상태바/알림창, 키보드는 '앱 전환'이 아님
+        if (pkg == "com.android.systemui" || pkg in imePackages()) return
+        // 팝업·광고·패널·토스트·오버레이 같은 창은 무시하고, 실제 '화면(Activity)' 전환만 본다
+        if (!isActivityWindow(pkg, cls)) {
+            log("무시  $pkg / ${cls?.substringAfterLast('.')}")
+            return
+        }
         if (pkg == packageName) {
             // 이 앱 설정 화면이 열림: 버튼은 그대로 두되(미리보기용) 실행 중인 동작은 멈춘다
+            log("설정화면  $pkg")
             stopTapping()
             stopAuto()
             return
         }
-        // 상태바/알림창, 키보드가 뜨는 것은 '앱 전환'이 아니므로 무시
-        if (pkg == "com.android.systemui" || pkg in imePackages()) return
         if (pkg == foregroundPackage) return
         foregroundPackage = pkg
 
-        if (!prefs.appModeEnabled) return
+        if (!prefs.appModeEnabled) {
+            log("앱 전환  $pkg")
+            return
+        }
         val inTarget = isInTargetApp()
-        // 지정한 앱에 들어오면 자동으로 켜기 (이전에 '모두 끄기' 했더라도)
-        if (inTarget && !wasInTargetApp) prefs.overlayVisible = true
-        wasInTargetApp = inTarget
-        applySettings()
+        log((if (inTarget) "지정앱 진입  " else "다른 앱  ") + pkg)
+        handler.removeCallbacks(hideRunnable)
+        if (inTarget) {
+            // 지정한 앱에 들어오면 자동으로 켜기 (이전에 '모두 끄기' 했더라도)
+            if (!wasInTargetApp) prefs.overlayVisible = true
+            wasInTargetApp = true
+            applySettings()
+        } else {
+            wasInTargetApp = false
+            handler.postDelayed(hideRunnable, 400)
+        }
+    }
+
+    /**
+     * 이벤트가 앱의 실제 화면(Activity) 전환인지 판단.
+     * - 그 패키지의 Activity 클래스면 true
+     * - 패키지는 있는데 Activity 가 아니면(대화상자, 팝업, 뷰 등) false
+     * - 이 사용자 공간에 설치돼 있지 않은 패키지(예: 보안 폴더에만 있는 앱)는
+     *   안드로이드 기본 위젯 클래스가 아니면 화면 전환으로 본다
+     */
+    private fun isActivityWindow(pkg: String, cls: String?): Boolean {
+        if (cls.isNullOrEmpty()) return false
+        return try {
+            packageManager.getActivityInfo(android.content.ComponentName(pkg, cls), 0)
+            true
+        } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
+            val installed = runCatching { packageManager.getPackageInfo(pkg, 0) }.isSuccess
+            !installed && !cls.startsWith("android.")
+        }
     }
 
     private fun imePackages(): Set<String> = runCatching {

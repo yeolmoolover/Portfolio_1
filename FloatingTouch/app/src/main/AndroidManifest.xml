@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- 앱 지정 모드: 화면에 뜬 창이 앱의 '화면(Activity)'인지 팝업인지 구분하려면
+         모든 패키지 정보를 조회할 수 있어야 한다 (Android 11+ 패키지 가시성) -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <!-- 앱 지정 모드에서 설치된 앱 목록을 보여주기 위해 (Android 11+ 패키지 가시성) -->
     <queries>
         <intent>
