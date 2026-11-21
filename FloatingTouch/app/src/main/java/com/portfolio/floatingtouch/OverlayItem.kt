@@ -32,8 +32,7 @@ class OverlayItem(
     private val longPressRunnable = Runnable {
         if (!dragging) {
             longPressed = true
-            view.scaleX = 1f
-            view.scaleY = 1f
+            view.isPressed = false
             onLongPress?.invoke()
         }
     }
@@ -177,8 +176,7 @@ class OverlayItem(
                     startY = params.y
                     dragging = false
                     longPressed = false
-                    view.scaleX = 0.92f
-                    view.scaleY = 0.92f
+                    view.isPressed = true
                     if (onLongPress != null) {
                         longPressHandler.postDelayed(
                             longPressRunnable, ViewConfiguration.getLongPressTimeout().toLong() + 200
@@ -209,8 +207,7 @@ class OverlayItem(
 
                 MotionEvent.ACTION_UP -> {
                     longPressHandler.removeCallbacks(longPressRunnable)
-                    view.scaleX = 1f
-                    view.scaleY = 1f
+                    view.isPressed = false
                     if (longPressed) {
                         // 길게 누르기로 이미 처리됨
                     } else if (!dragging) {
@@ -232,8 +229,7 @@ class OverlayItem(
 
                 MotionEvent.ACTION_CANCEL -> {
                     longPressHandler.removeCallbacks(longPressRunnable)
-                    view.scaleX = 1f
-                    view.scaleY = 1f
+                    view.isPressed = false
                     if (dragging) {
                         clampToScreen()
                         save()

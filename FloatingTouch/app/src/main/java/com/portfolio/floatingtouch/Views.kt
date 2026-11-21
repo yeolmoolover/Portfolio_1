@@ -34,8 +34,27 @@ class FloatButtonView(
         icon.setImageResource(res)
     }
 
+    private var active = false
+
     fun setActive(active: Boolean) {
-        bg.setColor(if (active) activeColor else baseColor)
+        this.active = active
+        updateColor()
+    }
+
+    /** 누르는 동안 아주 살짝 어둡게 (크기는 그대로) */
+    override fun setPressed(pressed: Boolean) {
+        super.setPressed(pressed)
+        updateColor()
+    }
+
+    private fun updateColor() {
+        val c = if (active) activeColor else baseColor
+        bg.setColor(if (isPressed) darken(c, PRESS_DIM) else c)
+    }
+
+    private fun darken(color: Int, amount: Float): Int {
+        fun ch(shift: Int) = (((color shr shift) and 0xFF) * (1 - amount)).toInt()
+        return (color and 0xFF000000.toInt()) or (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -49,6 +68,7 @@ class FloatButtonView(
         const val GRAY = 0xFF5F6368.toInt()          // 기본 회색
         const val GRAY_ACTIVE = 0xFF2B2D30.toInt()   // 실행 중: 진한 회색
         const val GRAY_OFF = 0xFFB4B8BD.toInt()      // 빠른 메뉴에서 '꺼짐'
+        const val PRESS_DIM = 0.12f                  // 눌렀을 때 12% 어둡게
     }
 }
 
