@@ -26,7 +26,6 @@ object ControlNotification {
     const val ACTION_TAP = "com.portfolio.floatingtouch.TAP"
     const val ACTION_AUTO = "com.portfolio.floatingtouch.AUTO"
     const val ACTION_OFF = "com.portfolio.floatingtouch.OFF"
-    const val ACTION_REPOST = "com.portfolio.floatingtouch.REPOST"
 
     fun canPost(context: Context): Boolean =
         Build.VERSION.SDK_INT < 33 ||
@@ -35,6 +34,12 @@ object ControlNotification {
 
     fun show(context: Context, prefs: Prefs) {
         if (!canPost(context)) return
+        // 모두 꺼진 상태(= 앱 끔)면 알림도, 상태바 아이콘도 없앤다.
+        // 다시 켜려면 앱 화면이나 빠른 설정 타일에서 기능을 켜면 알림이 다시 나타난다.
+        if (!prefs.overlayVisible) {
+            cancel(context)
+            return
+        }
         val nm = context.getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CHANNEL_ID) == null) {
             nm.createNotificationChannel(
@@ -81,8 +86,6 @@ object ControlNotification {
             .setShowWhen(false)
             .setCategory(Notification.CATEGORY_SERVICE)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
-            // Android 14+ 에서는 상주 알림도 밀어서 지울 수 있으므로, 지워지면 다시 띄운다
-            .setDeleteIntent(broadcast(context, ACTION_REPOST, 4))
             .build()
         nm.notify(NOTIF_ID, n)
     }

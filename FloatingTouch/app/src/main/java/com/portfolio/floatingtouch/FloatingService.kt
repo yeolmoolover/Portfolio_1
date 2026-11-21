@@ -181,7 +181,7 @@ class FloatingService : AccessibilityService() {
         applySettings()
         if (!visible) {
             Toast.makeText(
-                this, "플로팅 버튼 숨김 — 알림표시줄이나 빠른 설정 타일에서 다시 켤 수 있어요", Toast.LENGTH_SHORT
+                this, "모두 꺼짐 — 앱 화면이나 빠른 설정 타일에서 다시 켤 수 있어요", Toast.LENGTH_SHORT
             ).show()
         }
     }
@@ -193,7 +193,6 @@ class FloatingService : AccessibilityService() {
             ControlNotification.ACTION_TAP -> Controls.toggle(this, Feature.TAP)
             ControlNotification.ACTION_AUTO -> Controls.toggle(this, Feature.AUTO)
             ControlNotification.ACTION_OFF -> Controls.allOff(this)
-            ControlNotification.ACTION_REPOST -> applySettings()
         }
     }
 
