@@ -92,7 +92,15 @@ class MainActivity : Activity() {
 
         featureToggle(Feature.SCROLL, "1", "빠른 넘김", "누를 때마다 한 페이지씩 넘김", 0xFF1E88E5.toInt())
         featureToggle(Feature.TAP, "2", "자동 터치", "지정한 위치를 반복 터치", 0xFFE53935.toInt())
+        quickRow(
+            "터치 간격  ${fmtInterval(prefs.tapIntervalMs)}초",
+            listOf("-1" to -1000L, "-0.1" to -100L, "+0.1" to 100L, "+1" to 1000L),
+        ) { prefs.tapIntervalMs = prefs.tapIntervalMs + it }
         featureToggle(Feature.AUTO, "3", "자동 스크롤", "천천히 계속 스크롤 (속도 조절)", 0xFF8E24AA.toInt())
+        quickRow(
+            "스크롤 속도  ${prefs.autoSpeedDp}dp/초",
+            listOf("-10" to -10L, "-5" to -5L, "+5" to 5L, "+10" to 10L),
+        ) { prefs.autoSpeedDp = prefs.autoSpeedDp + it.toInt() }
         bigButton("✕  모두 끄기", null, 0xFF616161.toInt(), false, heightDp = 56) {
             Controls.allOff(this); refresh()
         }
@@ -248,7 +256,7 @@ class MainActivity : Activity() {
         hint("빨간 조준점(⊕)을 원하는 위치로 끌어다 놓고 ▶ 버튼을 누르면 그 위치를 반복 터치합니다. 다시 누르면 정지합니다. 실행 중에는 조준점을 옮길 수 없습니다.")
         // 1.0 ~ 10.0초, 0.1초 단위
         seekRow(
-            label = { "터치 간격: ${String.format(Locale.US, "%.1f", it / 10.0 + 1.0)}초" },
+            label = { "터치 간격: ${String.format(Locale.US, "%.1f", it / 10.0 + 1.0)}초 (1.0 ~ 10.0초, 실행 중 변경 시 다음 터치부터 반영)" },
             max = 90,
             initial = ((prefs.tapIntervalMs - 1000) / 100).toInt(),
         ) { prefs.tapIntervalMs = 1000L + it * 100L }
@@ -454,6 +462,28 @@ class MainActivity : Activity() {
             }
             .setNegativeButton("취소", null)
             .show()
+    }
+
+    private fun fmtInterval(ms: Long) = String.format(Locale.US, "%.1f", ms / 1000.0)
+
+    /** 큰 기능 버튼 바로 아래의 빠른 조절 줄: [라벨]  [-] [-] [+] [+] */
+    private fun quickRow(label: String, steps: List<Pair<String, Long>>, onStep: (Long) -> Unit) {
+        root.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), 0, 0, dp(12))
+            addView(TextView(context).apply {
+                text = label; textSize = 16f; typeface = Typeface.DEFAULT_BOLD
+                setTextColor(0xFF212121.toInt())
+            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1.3f))
+            steps.forEach { (text, step) ->
+                addView(Button(context).apply {
+                    this.text = text; isAllCaps = false; textSize = 13f
+                    minWidth = 0; minimumWidth = 0
+                    setOnClickListener { onStep(step); refresh() }
+                }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            }
+        })
     }
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
