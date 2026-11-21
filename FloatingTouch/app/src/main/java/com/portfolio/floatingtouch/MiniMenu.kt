@@ -12,8 +12,8 @@ import kotlin.math.sin
 
 /**
  * ☰ 버튼을 누르면 주변에 부채꼴로 '뿅뿅뿅' 튀어나오는 빠른 메뉴.
- *  ▼(1 빠른넘김)  ▶(2 자동터치)  ↓(3 자동스크롤)  ⚙(설정 앱 열기)
- * 1·2·3 은 누를 때마다 켜기/끄기 (켜짐 = 기능 색, 꺼짐 = 회색). 앱으로 이동하지 않는다.
+ *  [1 빠른넘김] [2 자동터치] [3 자동스크롤] [설정 앱 열기]
+ * 1·2·3 은 누를 때마다 켜기/끄기 (켜짐 = 진한 회색, 꺼짐 = 연한 회색). 앱으로 이동하지 않는다.
  * ☰ 를 다시 누르거나 5초 동안 아무것도 안 누르면 닫힌다.
  */
 class MiniMenu(
@@ -22,7 +22,7 @@ class MiniMenu(
     private val prefs: Prefs,
     private val onOpenApp: () -> Unit,
 ) {
-    private class Chip(val feature: Feature?, val view: CircleButtonView)
+    private class Chip(val feature: Feature?, val view: FloatButtonView)
 
     private val chips = mutableListOf<Chip>()
     private val handler = Handler(Looper.getMainLooper())
@@ -42,19 +42,21 @@ class MiniMenu(
         val fanLeft = cx > screen.x / 2f
         val anglesDeg = listOf(-67.5, -22.5, 22.5, 67.5)
         val defs = listOf(
-            Triple(Feature.SCROLL, if (prefs.scrollDown) "▼" else "▲", 0xFF1E88E5.toInt()),
-            Triple(Feature.TAP, "▶", 0xFFE53935.toInt()),
-            Triple(Feature.AUTO, "↓", 0xFF8E24AA.toInt()),
-            Triple(null, "⚙", 0xFF455A64.toInt()),
+            Feature.SCROLL to (if (prefs.scrollDown) R.drawable.ic_page_down else R.drawable.ic_page_up),
+            Feature.TAP to R.drawable.ic_auto_tap,
+            Feature.AUTO to R.drawable.ic_auto_scroll,
+            null to R.drawable.ic_settings,
         )
-        defs.forEachIndexed { i, (feature, label, color) ->
+        defs.forEachIndexed { i, (feature, iconRes) ->
             val t = anglesDeg[i] * PI / 180
             val a = if (fanLeft) PI - t else t
             val x = (cx + radius * cos(a) - size / 2f).roundToInt().coerceIn(0, screen.x - size)
             val y = (cy + radius * sin(a) - size / 2f).roundToInt().coerceIn(0, screen.y - size)
 
-            val off = if (feature == null) color else 0xFF90A4AE.toInt()
-            val view = CircleButtonView(context, off, color).apply { setLabel(label) }
+            // 켜짐 = 진한 회색, 꺼짐 = 연한 회색 (설정 ⚙ 는 기본 회색)
+            val view = (if (feature == null) FloatButtonView(context)
+            else FloatButtonView(context, FloatButtonView.GRAY_OFF, FloatButtonView.GRAY_ACTIVE))
+                .apply { setIcon(iconRes) }
             val params = ScreenUtil.overlayParams(size).apply { this.x = x; this.y = y }
             val chip = Chip(feature, view)
             view.setOnClickListener {

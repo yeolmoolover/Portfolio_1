@@ -2,6 +2,10 @@
 
 ![앱 아이콘](docs/icon-preview.png)
 
+![플로팅 버튼](docs/buttons-preview.png)
+
+플로팅 버튼은 회색 둥근 사각형에 [Iconsax](https://iconsax.io) Linear 아이콘을 사용합니다 (MIT, 출처는 [ICONS_LICENSE.md](ICONS_LICENSE.md)).
+
 화면 위에 떠 있는 플로팅 버튼 3개를 제공하는 안드로이드 앱입니다.
 
 | 버튼 | 기능 | 조절 범위 |

@@ -2,39 +2,36 @@ package com.portfolio.floatingtouch
 
 import android.content.Context
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
-import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.util.TypedValue
-import android.view.Gravity
 import android.view.View
 import android.widget.FrameLayout
-import android.widget.TextView
+import android.widget.ImageView
 
-/** 원형 플로팅 버튼 뷰 (아이콘 문자 + 배경색) */
-class CircleButtonView(context: Context, private val baseColor: Int, private val activeColor: Int) :
-    FrameLayout(context) {
+/**
+ * 둥근 사각형 플로팅 버튼 (회색 바탕 + Iconsax 아이콘).
+ * active=true 면 더 진한 회색 (실행 중 표시).
+ */
+class FloatButtonView(
+    context: Context,
+    private val baseColor: Int = GRAY,
+    private val activeColor: Int = GRAY_ACTIVE,
+) : FrameLayout(context) {
 
     private val bg = GradientDrawable().apply {
-        shape = GradientDrawable.OVAL
+        shape = GradientDrawable.RECTANGLE
         setColor(baseColor)
-        setStroke((2 * context.resources.displayMetrics.density).toInt(), 0x88FFFFFF.toInt())
+        setStroke((1 * context.resources.displayMetrics.density).toInt().coerceAtLeast(1), 0x33FFFFFF)
     }
-    private val label = TextView(context).apply {
-        gravity = Gravity.CENTER
-        setTextColor(Color.WHITE)
-        typeface = Typeface.DEFAULT_BOLD
-        includeFontPadding = false
-    }
+    private val icon = ImageView(context).apply { scaleType = ImageView.ScaleType.FIT_CENTER }
 
     init {
         background = bg
-        addView(label, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        addView(icon, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
 
-    fun setLabel(text: String) {
-        label.text = text
+    fun setIcon(res: Int) {
+        icon.setImageResource(res)
     }
 
     fun setActive(active: Boolean) {
@@ -43,7 +40,15 @@ class CircleButtonView(context: Context, private val baseColor: Int, private val
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
-        label.setTextSize(TypedValue.COMPLEX_UNIT_PX, w * 0.42f)
+        bg.cornerRadius = w * 0.28f            // 둥근 사각형
+        val pad = (w * 0.22f).toInt()          // 아이콘 여백
+        icon.setPadding(pad, pad, pad, pad)
+    }
+
+    companion object {
+        const val GRAY = 0xFF5F6368.toInt()          // 기본 회색
+        const val GRAY_ACTIVE = 0xFF2B2D30.toInt()   // 실행 중: 진한 회색
+        const val GRAY_OFF = 0xFFB4B8BD.toInt()      // 빠른 메뉴에서 '꺼짐'
     }
 }
 

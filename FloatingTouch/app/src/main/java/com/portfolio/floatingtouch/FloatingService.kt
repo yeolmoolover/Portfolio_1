@@ -44,16 +44,16 @@ class FloatingService : AccessibilityService() {
     private val handler = Handler(Looper.getMainLooper())
 
     private var scrollItem: OverlayItem? = null
-    private var scrollView: CircleButtonView? = null
+    private var scrollView: FloatButtonView? = null
     private var tapItem: OverlayItem? = null
-    private var tapView: CircleButtonView? = null
+    private var tapView: FloatButtonView? = null
     private var markerItem: OverlayItem? = null
     private var markerView: TargetMarkerView? = null
 
     private var miniItem: OverlayItem? = null
     private val miniMenu by lazy { MiniMenu(this, wm, prefs) { openApp() } }
     private var autoItem: OverlayItem? = null
-    private var autoView: CircleButtonView? = null
+    private var autoView: FloatButtonView? = null
 
     private var scrolling = false
     var tapping = false
@@ -207,7 +207,7 @@ class FloatingService : AccessibilityService() {
         // ---- 1. 빠른 스크롤 버튼 ----
         if (visible && prefs.scrollEnabled) {
             if (scrollItem == null) {
-                val v = CircleButtonView(this, 0xFF1E88E5.toInt(), 0xFF0D47A1.toInt())
+                val v = FloatButtonView(this)
                 scrollView = v
                 scrollItem = OverlayItem(
                     this, wm, prefs, Prefs.KEY_SCROLL, v, edgeHide = true,
@@ -215,7 +215,7 @@ class FloatingService : AccessibilityService() {
                     onLongPress = { openApp() },
                 ).also { it.attach(screen.x - dp(72), screen.y / 3) }
             }
-            scrollView?.setLabel(if (prefs.scrollDown) "▼" else "▲")
+            scrollView?.setIcon(if (prefs.scrollDown) R.drawable.ic_page_down else R.drawable.ic_page_up)
             scrollItem?.applyStyle(prefs.sizeDp(Prefs.KEY_SCROLL), prefs.alpha(Prefs.KEY_SCROLL))
         } else {
             scrollItem?.detach(); scrollItem = null; scrollView = null
@@ -233,7 +233,7 @@ class FloatingService : AccessibilityService() {
                     }
             }
             if (tapItem == null) {
-                val v = CircleButtonView(this, 0xFFE53935.toInt(), 0xFF43A047.toInt())
+                val v = FloatButtonView(this)
                 tapView = v
                 tapItem = OverlayItem(
                     this, wm, prefs, Prefs.KEY_TAP, v, edgeHide = true,
@@ -241,7 +241,7 @@ class FloatingService : AccessibilityService() {
                     onLongPress = { openApp() },
                 ).also { it.attach(screen.x - dp(72), screen.y / 3 + dp(90)) }
             }
-            tapView?.setLabel(if (tapping) "■" else "▶")
+            tapView?.setIcon(if (tapping) R.drawable.ic_stop else R.drawable.ic_auto_tap)
             tapItem?.applyStyle(prefs.sizeDp(Prefs.KEY_TAP), prefs.alpha(Prefs.KEY_TAP))
             markerItem?.applyStyle(
                 prefs.sizeDp(Prefs.KEY_TARGET), prefs.alpha(Prefs.KEY_TARGET), keepCenter = true
@@ -255,7 +255,7 @@ class FloatingService : AccessibilityService() {
         // ---- 3. 자동 스크롤 버튼 ----
         if (visible && prefs.autoEnabled) {
             if (autoItem == null) {
-                val v = CircleButtonView(this, 0xFF8E24AA.toInt(), 0xFF4A148C.toInt())
+                val v = FloatButtonView(this)
                 autoView = v
                 autoItem = OverlayItem(
                     this, wm, prefs, Prefs.KEY_AUTO, v, edgeHide = true,
@@ -263,7 +263,7 @@ class FloatingService : AccessibilityService() {
                     onLongPress = { openApp() },
                 ).also { it.attach(screen.x - dp(72), screen.y / 3 + dp(180)) }
             }
-            autoView?.setLabel(if (autoWanted) "■" else "↓")
+            autoView?.setIcon(if (autoWanted) R.drawable.ic_stop else R.drawable.ic_auto_scroll)
             autoItem?.applyStyle(prefs.sizeDp(Prefs.KEY_AUTO), prefs.alpha(Prefs.KEY_AUTO))
         } else {
             stopAuto()
@@ -274,8 +274,8 @@ class FloatingService : AccessibilityService() {
         val showMini = prefs.appModeEnabled && isInTargetApp()
         if (showMini) {
             if (miniItem == null) {
-                val v = CircleButtonView(this, 0xFF00897B.toInt(), 0xFF004D40.toInt())
-                v.setLabel("☰")
+                val v = FloatButtonView(this)
+                v.setIcon(R.drawable.ic_menu)
                 miniItem = OverlayItem(
                     this, wm, prefs, Prefs.KEY_MINI, v, edgeHide = true,
                     onClick = {
@@ -396,7 +396,7 @@ class FloatingService : AccessibilityService() {
         marker.draggable = false
         markerView?.running = true
         tapView?.setActive(true)
-        tapView?.setLabel("■")
+        tapView?.setIcon(R.drawable.ic_stop)
         handler.postDelayed(tapRunnable, TOUCHABLE_SETTLE_MS)
         Toast.makeText(this, "자동 터치 시작 (${prefs.tapIntervalMs / 1000.0}초 간격)", Toast.LENGTH_SHORT).show()
     }
@@ -411,7 +411,7 @@ class FloatingService : AccessibilityService() {
         }
         markerView?.running = false
         tapView?.setActive(false)
-        tapView?.setLabel("▶")
+        tapView?.setIcon(R.drawable.ic_auto_tap)
     }
 
     private fun performTap() {
@@ -444,7 +444,7 @@ class FloatingService : AccessibilityService() {
     fun startAuto() {
         autoWanted = true
         autoView?.setActive(true)
-        autoView?.setLabel("■")
+        autoView?.setIcon(R.drawable.ic_stop)
         if (!autoFingerDown) beginAutoStroke()
         Toast.makeText(this, "자동 스크롤 시작 (${prefs.autoSpeedDp}dp/초)", Toast.LENGTH_SHORT).show()
     }
@@ -454,7 +454,7 @@ class FloatingService : AccessibilityService() {
         autoWanted = false
         handler.removeCallbacks(autoResume)
         autoView?.setActive(false)
-        autoView?.setLabel("↓")
+        autoView?.setIcon(R.drawable.ic_auto_scroll)
     }
 
     private fun beginAutoStroke() {
