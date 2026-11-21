@@ -64,6 +64,7 @@ class FloatingService : AccessibilityService() {
         wm = getSystemService(WindowManager::class.java)
         prefs = Prefs(this)
         instance = this
+        lastNight = MenuTheme.isNight(this)
         // 이전 버전에서 띄우던 알림표시줄 알림이 남아 있으면 지운다 (알림 기능 삭제됨)
         runCatching { getSystemService(NotificationManager::class.java).cancelAll() }
         applySettings()
@@ -185,8 +186,17 @@ class FloatingService : AccessibilityService() {
         ToggleTileService.refresh(this)
     }
 
+    private var lastNight: Boolean? = null
+
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
+        // 라이트/다크 모드가 바뀌면 메뉴 버튼 색을 바로 바꾸고, 열린 메뉴는 닫는다
+        val night = MenuTheme.isNight(this)
+        if (lastNight != null && lastNight != night) {
+            miniMenu.close(immediate = true)
+            miniItem?.view?.let { if (it is FloatButtonView) MenuTheme.apply(it, MenuTheme.plain(this)) }
+        }
+        lastNight = night
         handler.post {
             scrollItem?.clampToScreen()
             tapItem?.clampToScreen()
@@ -275,6 +285,7 @@ class FloatingService : AccessibilityService() {
         if (showMini) {
             if (miniItem == null) {
                 val v = FloatButtonView(this)
+                MenuTheme.apply(v, MenuTheme.plain(this))
                 v.setIcon(R.drawable.ic_menu)
                 miniItem = OverlayItem(
                     this, wm, prefs, Prefs.KEY_MINI, v, edgeHide = true,

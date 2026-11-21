@@ -13,7 +13,7 @@ import kotlin.math.sin
 /**
  * ☰ 버튼을 누르면 주변에 부채꼴로 '뿅뿅뿅' 튀어나오는 빠른 메뉴.
  *  [1 빠른넘김] [2 자동터치] [3 자동스크롤] [설정 앱 열기]
- * 1·2·3 은 누를 때마다 켜기/끄기 (켜짐 = 진한 회색, 꺼짐 = 연한 회색). 앱으로 이동하지 않는다.
+ * 1·2·3 은 누를 때마다 켜기/끄기. 색은 MenuTheme (라이트/다크 모드별). 앱으로 이동하지 않는다.
  * ☰ 를 다시 누르거나 5초 동안 아무것도 안 누르면 닫힌다.
  */
 class MiniMenu(
@@ -53,10 +53,11 @@ class MiniMenu(
             val x = (cx + radius * cos(a) - size / 2f).roundToInt().coerceIn(0, screen.x - size)
             val y = (cy + radius * sin(a) - size / 2f).roundToInt().coerceIn(0, screen.y - size)
 
-            // 켜짐 = 진한 회색, 꺼짐 = 연한 회색 (설정 ⚙ 는 기본 회색)
-            val view = (if (feature == null) FloatButtonView(context)
-            else FloatButtonView(context, FloatButtonView.GRAY_OFF, FloatButtonView.GRAY_ACTIVE))
-                .apply { setIcon(iconRes) }
+            // 라이트 모드: 흰 바탕+회색 선 (켜짐은 회색으로 채움) / 다크 모드: 회색 계열
+            val view = FloatButtonView(context).apply {
+                MenuTheme.apply(this, if (feature == null) MenuTheme.plain(context) else MenuTheme.toggle(context))
+                setIcon(iconRes)
+            }
             val params = ScreenUtil.overlayParams(size).apply { this.x = x; this.y = y }
             val chip = Chip(feature, view)
             view.setOnClickListener {

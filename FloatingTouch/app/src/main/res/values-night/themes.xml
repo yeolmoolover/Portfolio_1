@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 다크 모드 -->
+    <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorAccent">#FF8C9BFF</item>
+        <item name="android:colorPrimary">#FF0F0F10</item>
+        <item name="android:colorPrimaryDark">#FF0F0F10</item>
+        <item name="android:statusBarColor">#FF0F0F10</item>
+        <item name="android:navigationBarColor">#FF0F0F10</item>
+        <item name="android:windowBackground">@color/screen_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
