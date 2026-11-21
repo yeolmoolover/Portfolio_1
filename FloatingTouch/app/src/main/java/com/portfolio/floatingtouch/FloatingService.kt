@@ -50,6 +50,7 @@ class FloatingService : AccessibilityService() {
     private var markerItem: OverlayItem? = null
     private var markerView: TargetMarkerView? = null
 
+    private var miniItem: OverlayItem? = null
     private var autoItem: OverlayItem? = null
     private var autoView: CircleButtonView? = null
 
@@ -72,7 +73,6 @@ class FloatingService : AccessibilityService() {
     /** 마지막으로 감지된 '일반 앱' 패키지 (키보드·상태바·이 앱 자체는 제외) */
     var foregroundPackage: String? = null
         private set
-    private var wasInTargetApp = false
 
     fun isInTargetApp(): Boolean = foregroundPackage?.let { it in prefs.targetApps } == true
 
@@ -121,15 +121,8 @@ class FloatingService : AccessibilityService() {
         val inTarget = isInTargetApp()
         log((if (inTarget) "지정앱 진입  " else "다른 앱  ") + pkg)
         handler.removeCallbacks(hideRunnable)
-        if (inTarget) {
-            // 지정한 앱에 들어오면 자동으로 켜기 (이전에 '모두 끄기' 했더라도)
-            if (!wasInTargetApp) prefs.overlayVisible = true
-            wasInTargetApp = true
-            applySettings()
-        } else {
-            wasInTargetApp = false
-            handler.postDelayed(hideRunnable, 400)
-        }
+        // 지정한 앱에 들어오면: 켜 둔 기능 버튼, 모두 꺼져 있으면 작은 '앱 열기' 버튼이 나타난다
+        if (inTarget) applySettings() else handler.postDelayed(hideRunnable, 400)
     }
 
     /**
@@ -184,6 +177,7 @@ class FloatingService : AccessibilityService() {
         tapItem?.detach(); tapItem = null; tapView = null
         markerItem?.detach(); markerItem = null; markerView = null
         autoItem?.detach(); autoItem = null; autoView = null
+        miniItem?.detach(); miniItem = null
         instance = null
         ToggleTileService.refresh(this)
     }
@@ -195,6 +189,7 @@ class FloatingService : AccessibilityService() {
             tapItem?.clampToScreen()
             markerItem?.clampToScreen()
             autoItem?.clampToScreen()
+            miniItem?.clampToScreen()
         }
     }
 
@@ -271,6 +266,24 @@ class FloatingService : AccessibilityService() {
             stopAuto()
             autoItem?.detach(); autoItem = null; autoView = null
         }
+
+        // ---- 작은 '앱 열기' 버튼: 앱 지정 모드 + 지정 앱 안 + 켜진 기능이 하나도 없을 때 ----
+        val showMini = prefs.appModeEnabled && isInTargetApp() &&
+            scrollItem == null && tapItem == null && autoItem == null
+        if (showMini) {
+            if (miniItem == null) {
+                val v = CircleButtonView(this, 0xFF00897B.toInt(), 0xFF004D40.toInt())
+                v.setLabel("☰")
+                miniItem = OverlayItem(
+                    this, wm, prefs, Prefs.KEY_MINI, v, edgeHide = true,
+                    onClick = { openApp() },
+                    onLongPress = { openApp() },
+                ).also { it.attach(screen.x - dp(56), screen.y / 3) }
+            }
+            miniItem?.applyStyle(prefs.sizeDp(Prefs.KEY_MINI), prefs.alpha(Prefs.KEY_MINI))
+        } else {
+            miniItem?.detach(); miniItem = null
+        }
     }
 
     /** 서비스는 켜 둔 채로 플로팅 버튼만 숨기기/보이기 */
@@ -290,6 +303,7 @@ class FloatingService : AccessibilityService() {
         tapItem?.resetPosition(screen.x - dp(72), screen.y / 3 + dp(90))
         markerItem?.resetPosition(screen.x / 2 - dp(24), screen.y / 2 - dp(24))
         autoItem?.resetPosition(screen.x - dp(72), screen.y / 3 + dp(180))
+        miniItem?.resetPosition(screen.x - dp(56), screen.y / 3)
     }
 
     // ===================== 1. 빠른 스크롤 =====================
@@ -352,6 +366,7 @@ class FloatingService : AccessibilityService() {
         scrollItem?.setTouchable(touchable)
         tapItem?.setTouchable(touchable)
         autoItem?.setTouchable(touchable)
+        miniItem?.setTouchable(touchable)
         // 조준점은 자동 터치 실행 중에는 항상 터치 불가 상태를 유지해야 한다
         markerItem?.setTouchable(touchable && !tapping)
     }

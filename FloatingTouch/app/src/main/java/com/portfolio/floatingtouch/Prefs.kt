@@ -101,6 +101,8 @@ class Prefs(context: Context) {
         const val KEY_TAP = "tap"
         const val KEY_TARGET = "target"
         const val KEY_AUTO = "auto"
+        /** 앱 지정 모드에서 기능이 모두 꺼졌을 때 보이는 작은 '앱 열기' 버튼 */
+        const val KEY_MINI = "mini"
 
         const val MIN_AUTO_SPEED = 5        // dp/초
         const val MAX_AUTO_SPEED = 800
@@ -120,8 +122,16 @@ class Prefs(context: Context) {
         /** 조준점은 화면을 덜 가리도록 더 작게 줄일 수 있게 */
         const val MIN_TARGET_SIZE_DP = 16
 
-        fun minSize(key: String) = if (key == KEY_TARGET) MIN_TARGET_SIZE_DP else MIN_SIZE_DP
-        fun defaultSize(key: String) = if (key == KEY_TARGET) 48 else DEFAULT_SIZE_DP
+        fun minSize(key: String) = when (key) {
+            KEY_TARGET -> MIN_TARGET_SIZE_DP
+            KEY_MINI -> 24
+            else -> MIN_SIZE_DP
+        }
+        fun defaultSize(key: String) = when (key) {
+            KEY_TARGET -> 48
+            KEY_MINI -> 36
+            else -> DEFAULT_SIZE_DP
+        }
         const val MAX_SIZE_DP = 120
         const val DEFAULT_SIZE_DP = 56
         const val MIN_ALPHA = 0.2f
