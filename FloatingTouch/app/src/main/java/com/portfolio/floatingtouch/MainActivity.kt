@@ -135,11 +135,11 @@ class MainActivity : Activity() {
             "• 메뉴 버튼을 다시 누르거나 5초가 지나면 닫힙니다. 메뉴 버튼이나 기능 버튼을 길게 누르면 이 설정 화면이 열립니다.\n" +
             "• 다른 앱이나 홈 화면으로 나가면 버튼이 모두 사라지고, 실행 중이던 자동 터치·자동 스크롤도 멈춥니다.")
         styleRows(Prefs.KEY_MINI, "메뉴(≡) 버튼 크기")
-        button("앱 감지 기록 보기 (문제 확인용)") {
+        button("동작 기록 보기 (문제 확인용)") {
             val logText = FloatingService.instance?.detectLog?.joinToString("\n")
                 ?.ifEmpty { "아직 기록이 없습니다" } ?: "서비스가 꺼져 있습니다"
             android.app.AlertDialog.Builder(this)
-                .setTitle("최근 감지 기록 (최신이 위)")
+                .setTitle("최근 동작 기록 (최신이 위)")
                 .setMessage("현재 앱: ${FloatingService.instance?.foregroundPackage ?: "-"}\n\n$logText")
                 .setPositiveButton("닫기", null)
                 .show()
