@@ -242,6 +242,11 @@ class MainActivity : Activity() {
             startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
         }
         divider(etc)
+        switchRow(
+            etc, R.drawable.ic_keyboard, 0xFF6B7280.toInt(), "키보드가 뜨면 숨기기",
+            "입력할 때는 버튼을 숨기고, 키보드가 닫히면 다시 표시", prefs.hideOnKeyboard,
+        ) { prefs.hideOnKeyboard = !prefs.hideOnKeyboard; apply(); refresh() }
+        divider(etc)
         navRow(etc, "버튼 위치 초기화", null) {
             FloatingService.instance?.resetPositions()
                 ?: listOf(Prefs.KEY_SCROLL, Prefs.KEY_TAP, Prefs.KEY_TARGET, Prefs.KEY_AUTO, Prefs.KEY_MINI)

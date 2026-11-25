@@ -80,7 +80,26 @@ class FloatingService : AccessibilityService() {
 
     /** 앱 지정 모드를 반영한 실제 표시 여부 */
     private fun effectiveVisible(): Boolean =
-        prefs.overlayVisible && (!prefs.appModeEnabled || isInTargetApp())
+        prefs.overlayVisible && (!prefs.appModeEnabled || isInTargetApp()) && !hiddenByKeyboard()
+
+    /** 지금 키보드가 화면에 떠 있는지 */
+    private var keyboardVisible = false
+
+    private fun hiddenByKeyboard() = keyboardVisible && prefs.hideOnKeyboard
+
+    /**
+     * 화면에 떠 있는 창 목록에서 키보드(입력기) 창이 있는지 확인한다.
+     * 창의 '종류'만 보며 내용은 읽지 않는다.
+     */
+    private fun checkKeyboard() {
+        val visible = runCatching {
+            windows.any { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_INPUT_METHOD }
+        }.getOrDefault(false)
+        if (visible == keyboardVisible) return
+        keyboardVisible = visible
+        log(if (visible) "키보드 표시 → 버튼 숨김" else "키보드 닫힘 → 버튼 표시")
+        if (prefs.hideOnKeyboard) applySettings()
+    }
 
     /** 설정 화면에 보여줄 최근 감지 기록 (문제 확인용) */
     val detectLog = ArrayDeque<String>()
@@ -95,7 +114,12 @@ class FloatingService : AccessibilityService() {
     private val hideRunnable = Runnable { applySettings() }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        if (event == null) return
+        // 창이 생기거나 사라질 때마다 키보드 여부 확인
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED ||
+            event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+        ) checkKeyboard()
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
         val pkg = event.packageName?.toString() ?: return
         val cls = event.className?.toString()
 
@@ -281,7 +305,7 @@ class FloatingService : AccessibilityService() {
         }
 
         // ---- ☰ 메뉴 버튼: 앱 지정 모드에서 지정 앱 안에 있으면 항상 표시 ----
-        val showMini = prefs.appModeEnabled && isInTargetApp()
+        val showMini = prefs.appModeEnabled && isInTargetApp() && !hiddenByKeyboard()
         if (showMini) {
             if (miniItem == null) {
                 val v = FloatButtonView(this)

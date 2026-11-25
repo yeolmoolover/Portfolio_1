@@ -3,5 +3,5 @@
     <string name="app_name">플로팅 터치</string>
     <string name="service_label">플로팅 터치 (스크롤/자동 터치)</string>
     <string name="tile_label">플로팅 버튼</string>
-    <string name="service_description">화면 위에 플로팅 버튼을 띄우고, 버튼을 누르면 빠른 스크롤 또는 지정한 위치 반복 터치를 수행합니다. 화면 내용은 읽지 않습니다.</string>
+    <string name="service_description">화면 위에 플로팅 버튼을 띄우고, 버튼을 누르면 빠른 스크롤 또는 지정한 위치 반복 터치를 수행합니다. 키보드가 떠 있는지 확인하기 위해 화면에 떠 있는 창의 종류만 확인하며, 화면의 글자나 내용은 읽지 않습니다.</string>
 </resources>

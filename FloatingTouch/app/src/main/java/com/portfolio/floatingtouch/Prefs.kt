@@ -39,6 +39,11 @@ class Prefs(context: Context) {
         set(v) = sp.edit().putBoolean("overlay_visible", v).apply()
 
     /** 앱 지정 모드: 켜면 지정한 앱이 화면에 있을 때만 플로팅 버튼이 보인다 */
+    /** 키보드가 화면에 떠 있는 동안 플로팅 버튼 숨기기 */
+    var hideOnKeyboard: Boolean
+        get() = sp.getBoolean("hide_on_keyboard", true)
+        set(v) = sp.edit().putBoolean("hide_on_keyboard", v).apply()
+
     var appModeEnabled: Boolean
         get() = sp.getBoolean("app_mode", false)
         set(v) = sp.edit().putBoolean("app_mode", v).apply()
